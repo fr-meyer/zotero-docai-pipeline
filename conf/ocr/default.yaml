@@ -1,0 +1,8 @@
+# OCR provider selection
+# Options: "mistral", "pageindex"
+# provider: pageindex
+
+# Provider-specific configuration is loaded from conf/ocr/{provider}.yaml
+defaults:
+  # - ${provider}
+  - pageindex

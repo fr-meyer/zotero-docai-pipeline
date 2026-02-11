@@ -1,0 +1,18 @@
+name: zotero-docai-pipeline
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.8
+  - pip
+  - markdown-it-py
+  - mdit-py-plugins
+  - hydra-core>=1.3.0
+  - ruff
+  - pyright
+  - pip:
+    - pyzotero
+    - mistralai
+    - tabulate
+    - pageindex
+    - omegaconf

@@ -1,0 +1,44 @@
+# PDF download feature configuration
+# Controls whether and how PDFs are downloaded from Zotero items
+
+# Enable/disable PDF download feature
+# Default: false for backward compatibility
+enabled: false
+
+# Zotero tag to filter items for download
+# Only items with this tag will be processed
+tag: "docai"
+
+# Local directory path where downloaded PDFs will be saved
+upload_folder: "./downloads"
+
+# Whether to preserve original PDF filenames
+# When false, files are renamed based on Zotero item metadata
+preserve_filenames: true
+
+# Whether to create subfolders for organizing downloads
+# (e.g., by collection or date)
+create_subfolders: false
+
+# Whether to skip downloading PDFs that already exist locally
+# Prevents redundant downloads
+skip_existing: true
+
+# Maximum number of concurrent download operations
+# Must be greater than 0
+max_concurrent_downloads: 5
+
+# Retry configuration for failed download attempts
+retry:
+  # Maximum number of retry attempts before giving up
+  max_attempts: 3
+  
+  # Initial delay in seconds before first retry
+  initial_delay: 2
+  
+  # Multiplier for exponential backoff
+  # Delay doubles by default on each retry
+  backoff_multiplier: 2.0
+  
+  # Maximum delay cap in seconds to prevent excessively long waits
+  max_delay: 16

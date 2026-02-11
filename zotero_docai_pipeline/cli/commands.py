@@ -127,6 +127,7 @@ def _determine_exit_code(
             - failed_items: Number of items that failed processing
             - successful_items: Number of items that succeeded
             - total_items: Total number of items processed
+            - total_pdfs_failed: Number of PDFs that failed to download
 
     Returns:
         Exit code: 0 for success, 1 for partial failure, 2 for complete failure
@@ -134,6 +135,7 @@ def _determine_exit_code(
     failed_items = summary.get("failed_items", 0)
     successful_items = summary.get("successful_items", 0)
     total_items = summary.get("total_items", 0)
+    total_pdfs_failed = summary.get("total_pdfs_failed", 0)
 
     # Type narrow to int
     if not isinstance(failed_items, int):
@@ -142,6 +144,15 @@ def _determine_exit_code(
         successful_items = 0
     if not isinstance(total_items, int):
         total_items = 0
+    if not isinstance(total_pdfs_failed, int):
+        total_pdfs_failed = 0
+
+    # Check PDF download failures - must return non-zero exit code
+    if total_pdfs_failed > 0:
+        if successful_items == 0:
+            return 2  # Complete failure (no items succeeded)
+        else:
+            return 1  # Partial failure (some items succeeded)
 
     if failed_items == 0:
         return 0  # Success

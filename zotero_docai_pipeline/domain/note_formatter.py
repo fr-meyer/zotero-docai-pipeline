@@ -315,6 +315,39 @@ class NoteFormatter:
 
         combined_content = "".join(content_parts)
 
+        # Collect and append non-embedded images and tables from all pages
+        # Iterate through valid_pages to collect all images and tables
+        for page in valid_pages:
+            # Check if images/tables are embedded using helper methods
+            images_embedded = NoteFormatter._images_already_embedded(page.markdown)
+            tables_embedded = NoteFormatter._tables_already_embedded(
+                page.markdown, page.tables
+            )
+
+            # Append non-embedded tables
+            if page.tables and not tables_embedded:
+                combined_content += "\n\n<!-- Tables -->\n"
+                for table in page.tables:
+                    if isinstance(table, str):
+                        combined_content += table
+                    else:
+                        combined_content += str(table)
+                    combined_content += "\n"
+
+            # Append non-embedded images
+            if page.images and not images_embedded:
+                combined_content += "\n\n<!-- Images -->\n"
+                for image_base64 in page.images:
+                    if isinstance(image_base64, str) and image_base64.startswith(
+                        "data:"
+                    ):
+                        src_uri = image_base64
+                    else:
+                        src_uri = f"data:image/png;base64,{image_base64}"
+                    combined_content += (
+                        f'<img src="{src_uri}" alt="Page {page.page_number} image" />\n'
+                    )
+
         # Convert markdown tables to CSV
         combined_content = convert_markdown_tables_to_csv(combined_content)
 
@@ -455,6 +488,39 @@ class NoteFormatter:
                 "\n\n",
                 page.markdown,  # Use markdown directly from OCR
             ]
+            initial_content = "".join(content_parts)
+
+            # Check if images/tables are embedded and append non-embedded media
+            images_embedded = NoteFormatter._images_already_embedded(page.markdown)
+            tables_embedded = NoteFormatter._tables_already_embedded(
+                page.markdown, page.tables
+            )
+
+            # Append non-embedded tables
+            if page.tables and not tables_embedded:
+                content_parts.append("\n\n<!-- Tables -->\n")
+                for table in page.tables:
+                    if isinstance(table, str):
+                        content_parts.append(table)
+                    else:
+                        content_parts.append(str(table))
+                    content_parts.append("\n")
+
+            # Append non-embedded images
+            if page.images and not images_embedded:
+                content_parts.append("\n\n<!-- Images -->\n")
+                for image_base64 in page.images:
+                    if isinstance(image_base64, str) and image_base64.startswith(
+                        "data:"
+                    ):
+                        src_uri = image_base64
+                    else:
+                        src_uri = f"data:image/png;base64,{image_base64}"
+                    content_parts.append(
+                        f'<img src="{src_uri}" alt="Page {page.page_number} image" />\n'
+                    )
+
+            # Rebuild initial_content with appended media
             initial_content = "".join(content_parts)
 
             # Convert markdown tables to CSV fenced code blocks

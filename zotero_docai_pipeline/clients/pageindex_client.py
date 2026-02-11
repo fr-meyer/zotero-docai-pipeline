@@ -4,6 +4,7 @@ This module provides a high-level interface for interacting with the PageIndex
 OCR API, handling file uploads, OCR processing, and result parsing into domain models.
 """
 
+from collections import deque
 from collections.abc import Callable
 import json
 import logging
@@ -1053,27 +1054,26 @@ class PageIndexClient(OCRClient):
 
         # Initialize tracking structures
         results: dict[str, list[PageContent]] = {}
-        pending_docs: list[str] = list(doc_ids)  # FIFO queue
+        pending_docs: deque[str] = deque(doc_ids)  # FIFO queue
         polling_state: dict[str, dict] = {}
         errors: dict[str, str] = {}
         processing_reported: set = (
             set()
         )  # Track which documents have had "processing" reported
 
-        # Initialize polling state for all documents
-        start_time = time.time()
+        # Initialize polling state for all documents with per-document start times
         for doc_id in doc_ids:
             polling_state[doc_id] = {
                 "attempts": 0,
-                "start_time": start_time,
-                "last_poll_time": start_time,
+                "start_time": time.time(),
+                "last_poll_time": time.time(),
             }
 
         # Polling loop - FIFO processing
         # Documents are processed in first-in-first-out order to ensure fairness
         while pending_docs:
             # Get next doc_id from front of queue (FIFO)
-            doc_id = pending_docs.pop(0)
+            doc_id = pending_docs.popleft()
             state = polling_state[doc_id]
 
             # Report "processing" status on first attempt

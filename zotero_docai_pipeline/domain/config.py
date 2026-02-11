@@ -64,12 +64,17 @@ class ZoteroConfig:
     failed items in Zotero."""
 
     def __post_init__(self) -> None:
-        """Validate that library_id is not empty."""
+        """Validate that library_id and api_key are not empty."""
         if not self.library_id or not self.library_id.strip():
             raise ConfigError(
                 "library_id is required and cannot be empty. "
                 "Find your library ID in your Zotero web library URL: "
                 "https://www.zotero.org/users/{library_id}"
+            )
+        if not self.api_key or not self.api_key.strip():
+            raise ConfigError(
+                "api_key is required and cannot be empty. Obtain your API key from "
+                "https://www.zotero.org/settings/keys"
             )
 
 
@@ -86,6 +91,18 @@ class OCRProviderConfig:
 
     provider: str = "mistral"
     """OCR provider identifier. Options: 'mistral', 'pageindex'"""
+
+    def __post_init__(self) -> None:
+        """Validate OCR provider configuration."""
+        allowed_ocr_providers = {"mistral", "pageindex"}
+        # Note: api_key validation is done in subclasses
+        # (MistralOCRConfig, PageIndexOCRConfig) because api_key is not
+        # defined in this base class
+        if self.enabled is True and self.provider not in allowed_ocr_providers:
+            raise ConfigError(
+                f"provider must be one of {allowed_ocr_providers}, "
+                f"got '{self.provider}'"
+            )
 
 
 @dataclass
@@ -124,6 +141,12 @@ class MistralOCRConfig(OCRProviderConfig):
 
     extract_footer: bool = False
     """Whether to extract document footers. May increase processing time."""
+
+    def __post_init__(self) -> None:
+        """Validate Mistral OCR configuration."""
+        super().__post_init__()  # Call parent validation
+        if self.enabled is True and (not self.api_key or not self.api_key.strip()):
+            raise ConfigError("api_key is required when OCR is enabled")
 
 
 @dataclass
@@ -193,6 +216,12 @@ class PageIndexOCRConfig(OCRProviderConfig):
     polling_batch_delay: int = 1
     """Delay in seconds between processing documents in a batch. Prevents API
     rate limiting when polling multiple documents sequentially."""
+
+    def __post_init__(self) -> None:
+        """Validate PageIndex OCR configuration."""
+        super().__post_init__()  # Call parent validation
+        if self.enabled is True and (not self.api_key or not self.api_key.strip()):
+            raise ConfigError("api_key is required when OCR is enabled")
 
 
 @dataclass
@@ -407,6 +436,15 @@ When 'page_by_page' is selected (legacy):
     for debugging.
     """
 
+    def __post_init__(self) -> None:
+        """Validate processing configuration parameters."""
+        allowed_extraction_modes = {"all_at_once", "page_by_page"}
+        if self.extraction_mode not in allowed_extraction_modes:
+            raise ConfigError(
+                f"extraction_mode must be one of {allowed_extraction_modes}, "
+                f"got '{self.extraction_mode}'"
+            )
+
 
 @dataclass
 class StorageConfig:
@@ -470,7 +508,8 @@ def register_configs() -> None:
     # Register OCR provider configs
     cs.store(group="ocr", name="mistral", node=MistralOCRConfig)
     cs.store(group="ocr", name="pageindex", node=PageIndexOCRConfig)
-    cs.store(group="ocr", name="default", node=OCRProviderConfig)
+    # Note: OCRProviderConfig is abstract base class, not registered as default
+    # Users must select a concrete provider (mistral or pageindex)
 
     cs.store(group="processing", name="default", node=ProcessingConfig)
     cs.store(group="storage", name="default", node=StorageConfig)

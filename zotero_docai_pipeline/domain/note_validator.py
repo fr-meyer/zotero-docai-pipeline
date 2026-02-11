@@ -48,8 +48,10 @@ import re
 
 from zotero_docai_pipeline.clients.exceptions import NoteSizeExceededError
 
-# Default threshold: 256,000 bytes (250KB) for Zotero compatibility
-# Using 256KB instead of 250KB to provide a small safety margin
+# Default threshold: 256,000 characters for Zotero compatibility
+# Using 256KB character count instead of 250KB to provide a small safety margin
+# Note: ProcessingConfig.note_size_threshold (default 180000) overrides this value
+# in production. The 256000 threshold here provides a safe upper bound for validation.
 DEFAULT_NOTE_SIZE_THRESHOLD = 256000
 
 
@@ -62,9 +64,10 @@ class NoteValidator:
     instantiation.
 
     The validator checks content size against a configurable threshold (default
-    256,000 bytes, which is 250KB with a small safety margin for Zotero compatibility).
-    Content that exceeds the threshold can either raise an error (when splitting is
-    disabled) or be split into smaller chunks (when splitting is enabled).
+    256,000 characters, which is 250KB with a small safety margin for Zotero
+    compatibility). Content that exceeds the threshold can either raise an error
+    (when splitting is disabled) or be split into smaller chunks (when splitting
+    is enabled).
 
     The smart splitting algorithm uses a three-tier strategy:
     1. Header-based splitting: Attempts to split at markdown headers (#, ##, ###, etc.)
@@ -118,8 +121,8 @@ class NoteValidator:
 
             Args:
                 content: The note content string to validate and potentially split.
-                threshold: Maximum allowed content size in bytes (character count).
-                    Defaults to DEFAULT_NOTE_SIZE_THRESHOLD (256,000 bytes).
+                threshold: Maximum allowed content size in character count.
+                    Defaults to DEFAULT_NOTE_SIZE_THRESHOLD (256,000 characters).
                 allow_split: If True, attempt to split oversized content into smaller
                     chunks. If False, raise NoteSizeExceededError for oversized content.
                     Defaults to True.
@@ -195,10 +198,18 @@ class NoteValidator:
 
         # Step 3: Delegate to Splitting Logic
         # Smart splitting algorithm uses three-tier strategy
-        return NoteValidator._split_content(content, threshold)
+        return NoteValidator._split_content(
+            content, threshold, filename, page_number, element_type
+        )
 
     @staticmethod
-    def _split_content(content: str, threshold: int) -> list[str]:
+    def _split_content(
+        content: str,
+        threshold: int,
+        filename: str | None = None,
+        page_number: int | None = None,
+        element_type: str | None = None,
+    ) -> list[str]:
         """Split oversized content into smaller chunks using smart algorithm.
 
         This method implements a three-tier splitting strategy:
@@ -212,7 +223,10 @@ class NoteValidator:
 
         Args:
             content: The content string to split into smaller chunks.
-            threshold: Maximum size for each chunk in bytes (character count).
+            threshold: Maximum size for each chunk in character count.
+            filename: Optional filename for error context.
+            page_number: Optional page number for error context.
+            element_type: Optional element type for error context.
 
         Returns:
             A list of strings, each under the threshold size. All chunks are
@@ -242,7 +256,9 @@ class NoteValidator:
             return chunks
 
         # Final fallback: character-based splitting (always succeeds)
-        chunks = NoteValidator._split_by_characters(content, threshold)
+        chunks = NoteValidator._split_by_characters(
+            content, threshold, filename, page_number, element_type
+        )
         NoteValidator._validate_chunks(chunks, threshold)
         return chunks
 
@@ -268,7 +284,7 @@ class NoteValidator:
 
         Args:
             content: The content string to split.
-            threshold: Maximum size for each chunk in bytes (character count).
+            threshold: Maximum size for each chunk in character count.
 
         Returns:
             A list of strings split at header boundaries, or empty list if this
@@ -349,7 +365,7 @@ class NoteValidator:
 
         Args:
             content: The content string to split.
-            threshold: Maximum size for each chunk in bytes (character count).
+            threshold: Maximum size for each chunk in character count.
 
         Returns:
             A list of strings split at paragraph boundaries, or empty list if
@@ -405,7 +421,13 @@ class NoteValidator:
         return chunks if chunks else []
 
     @staticmethod
-    def _split_by_characters(content: str, threshold: int) -> list[str]:
+    def _split_by_characters(
+        content: str,
+        threshold: int,
+        filename: str | None = None,
+        page_number: int | None = None,
+        element_type: str | None = None,
+    ) -> list[str]:
         """Split content into character-based chunks with space-aware breaking.
 
         This method splits content into chunks of maximum `threshold` size, using
@@ -427,8 +449,11 @@ class NoteValidator:
 
         Args:
             content: The content string to split.
-            threshold: Maximum size for each chunk in bytes (character count).
+            threshold: Maximum size for each chunk in character count.
                 Must be positive.
+            filename: Optional filename for error context.
+            page_number: Optional page number for error context.
+            element_type: Optional element type for error context.
 
         Returns:
             A list of strings, each under or equal to the threshold size. This method
@@ -455,6 +480,39 @@ class NoteValidator:
 
         if len(content) <= threshold:
             return [content]
+
+        # Check for data URIs before character-based splitting
+        # Data URIs are long continuous base64 strings that cannot be split
+        # without corruption
+        if "data:image" in content or "data:" in content:
+            # Calculate the longest continuous non-space run to detect base64 data
+            longest_run = 0
+            current_run = 0
+            for char in content:
+                if char != " " and char != "\n":
+                    current_run += 1
+                    longest_run = max(longest_run, current_run)
+                else:
+                    current_run = 0
+
+            # If longest run exceeds threshold, it's likely an unsplittable
+            # data URI
+            if longest_run > threshold:
+                # Validate context before raising error to ensure full context
+                # is available
+                NoteValidator._validate_context(filename, page_number, element_type)
+                raise NoteSizeExceededError(
+                    message=(
+                        "Content contains unsplittable data URIs that exceed "
+                        "size threshold. Character-based splitting would "
+                        "corrupt base64 image data."
+                    ),
+                    filename=filename or "unknown",
+                    page_number=page_number or 0,
+                    element_type=element_type or "note",
+                    actual_size=len(content),
+                    threshold=threshold,
+                )
 
         chunks = []
         start = 0
@@ -502,7 +560,7 @@ class NoteValidator:
 
         Args:
             chunks: List of content chunks to validate.
-            threshold: Maximum allowed size for each chunk in bytes (character count).
+            threshold: Maximum allowed size for each chunk in character count.
 
         Returns:
             True if all chunks are valid (under threshold).
@@ -525,7 +583,7 @@ class NoteValidator:
             if len(chunk) > threshold:
                 raise ValueError(
                     f"Internal error: Chunk {i} exceeds threshold "
-                    f"({len(chunk)} > {threshold} bytes). This indicates a bug "
+                    f"({len(chunk)} > {threshold} characters). This indicates a bug "
                     f"in the splitting logic."
                 )
         return True

@@ -173,8 +173,8 @@ class ItemProcessor:
             ProcessingResult.errors list.
         """
         start_time = time.time()
-        item_key = item["key"]
-        item_title = item["title"]
+        item_key = item.get("key", "unknown")
+        item_title = item.get("title", "Untitled")
 
         # Initialize tracking variables
         total_pages = 0
@@ -204,8 +204,18 @@ class ItemProcessor:
         # Process each PDF attachment using pre-fetched results
         total_pdfs = len(attachments)
         for pdf_index, attachment in enumerate(attachments, start=1):
-            attachment_key = attachment["key"]
-            filename = attachment["filename"]
+            attachment_key = attachment.get("key")
+            filename = attachment.get("filename")
+
+            # Validate attachment has required fields
+            if not attachment_key or not filename:
+                self.logger.warning("Skipping attachment with missing key or filename")
+                continue
+
+            # Filter non-PDF attachments
+            if not filename.lower().endswith(".pdf"):
+                self.logger.debug(f"Skipping non-PDF attachment: {filename}")
+                continue
 
             try:
                 # Look up OCR results for this attachment using attachment_key
@@ -256,12 +266,14 @@ class ItemProcessor:
                 )
 
                 # Store page contents for disk persistence
+                # (use attachment_key as dict key)
                 if pdf_page_contents:
-                    page_contents[filename] = pdf_page_contents
+                    page_contents[attachment_key] = pdf_page_contents
 
                 # Store tree structure for disk persistence
+                # (use attachment_key as dict key)
                 if tree:
-                    pdf_trees[filename] = tree
+                    pdf_trees[attachment_key] = tree
 
                 total_pages += pages_extracted
                 total_notes += notes_created

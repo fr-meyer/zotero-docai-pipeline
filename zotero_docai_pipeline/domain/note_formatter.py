@@ -135,8 +135,11 @@ class NoteFormatter:
             True if tables are embedded (no placeholders and table content in markdown),
             False if placeholders found or tables not in markdown.
         """
-        # Check for table placeholder pattern: [tbl-X.md](tbl-X.md) or [tbl-X](tbl-X)
-        placeholder_pattern = r"\[tbl-\d+(?:\.md)?\]\(tbl-\d+(?:\.md)?\)"
+        # Check for table placeholder pattern:
+        # [tbl-X](tbl-X), [tbl-X.md](tbl-X.md), or [tbl-X.html](tbl-X.html)
+        placeholder_pattern = (
+            r"\[tbl-\d+(?:\.(?:md|html))?\]\(tbl-\d+(?:\.(?:md|html))?\)"
+        )
         if re.search(placeholder_pattern, markdown):
             # Placeholders found, tables not embedded
             return False

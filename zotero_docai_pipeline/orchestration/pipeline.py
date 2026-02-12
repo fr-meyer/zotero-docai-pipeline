@@ -64,7 +64,6 @@ from zotero_docai_pipeline.domain.config import (
     ConfigError,
     DownloadConfig,
     OCRProviderConfig,
-    PageIndexOCRConfig,
     ProcessingConfig,
     StorageConfig,
     TreeStructureConfig,
@@ -1573,14 +1572,10 @@ class Pipeline:
             self.tree_structure_config.enabled
             and self.ocr_client.provider == OCRProvider.MISTRAL
         ):
-            # Check if PageIndex credentials are available
-            has_pageindex_config = (
-                isinstance(self.ocr_config, PageIndexOCRConfig)
-                and self.ocr_config.api_key
-            )
+            # Check if PageIndex credentials are available via environment
             has_pageindex_env = bool(os.getenv("PAGEINDEX_API_KEY"))
 
-            if not has_pageindex_config and not has_pageindex_env:
+            if not has_pageindex_env:
                 self.logger.warning(
                     "Tree extraction enabled with Mistral OCR but PageIndex "
                     "credentials not available. Tree extraction requires "

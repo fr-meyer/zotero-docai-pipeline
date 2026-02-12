@@ -582,6 +582,13 @@ class Pipeline:
 
         return pdfs
 
+    @staticmethod
+    def _is_pdf_attachment(attachment: dict[str, Any]) -> bool:
+        """Return True if attachment is a PDF by filename or contentType."""
+        fn = (attachment.get("filename") or "").lower()
+        ct = (attachment.get("contentType") or "").lower()
+        return fn.endswith(".pdf") or ct == "application/pdf"
+
     def _tag_items_based_on_download(
         self,
         items: list[dict[str, Any]],
@@ -618,15 +625,18 @@ class Pipeline:
                 success_item_keys.add(item_key)
 
         # Build set of failed item keys
-        # An item fails if any of its attachments is not in path_mapping
+        # An item fails if any of its PDF attachments is not in path_mapping
         failed_item_keys = set()
         for item in items:
             item_key = item.get("key", "")
             attachments = item.get("attachments", [])
+            pdf_attachments = [
+                att for att in attachments if self._is_pdf_attachment(att)
+            ]
 
-            # Check if all attachments succeeded
+            # Check if all PDF attachments succeeded
             all_succeeded = True
-            for attachment in attachments:
+            for attachment in pdf_attachments:
                 attachment_key = attachment.get("key", "")
                 mapping_key = f"{item_key}:::{attachment_key}"
                 if mapping_key not in path_mapping:
@@ -652,10 +662,13 @@ class Pipeline:
                         )
                         error_tagged_count += 1
                 elif item_key in success_item_keys:
-                    # Check if ALL attachments succeeded
+                    # Check if ALL PDF attachments succeeded
                     attachments = item.get("attachments", [])
+                    pdf_attachments = [
+                        att for att in attachments if self._is_pdf_attachment(att)
+                    ]
                     all_attachments_succeeded = True
-                    for attachment in attachments:
+                    for attachment in pdf_attachments:
                         attachment_key = attachment.get("key", "")
                         mapping_key = f"{item_key}:::{attachment_key}"
                         if mapping_key not in path_mapping:
@@ -705,8 +718,17 @@ class Pipeline:
         """
         pdfs: list[tuple[bytes, str, str, str]] = []
 
-        # Calculate total PDFs across all items
-        total_pdfs = sum(len(item.get("attachments", [])) for item in items)
+        # Calculate total PDFs across all items (PDF attachments only)
+        total_pdfs = sum(
+            len(
+                [
+                    att
+                    for att in item.get("attachments", [])
+                    if self._is_pdf_attachment(att)
+                ]
+            )
+            for item in items
+        )
 
         success_count = 0
         total_count = total_pdfs
@@ -717,8 +739,11 @@ class Pipeline:
                 item_key = item.get("key", "")
                 item_title = item.get("title", "Untitled")
                 attachments = item.get("attachments", [])
+                pdf_attachments = [
+                    att for att in attachments if self._is_pdf_attachment(att)
+                ]
 
-                for attachment in attachments:
+                for attachment in pdf_attachments:
                     attachment_key = attachment.get("key", "")
                     filename = attachment.get(
                         "filename",
@@ -1638,13 +1663,20 @@ class Pipeline:
                 items, download_summary, self._download_path_mapping
             )
 
-            # Return early with download-only summary
+            # Return early with download-only summary (item-level from path_mapping)
             total_time = time.time() - start_time
+            path_mapping = self._download_path_mapping
+            successful_items = len(
+                {
+                    key.split(":::", 1)[0] if ":::" in key else key.rsplit("_", 1)[0]
+                    for key in path_mapping
+                }
+            )
+            failed_items = max(0, len(items) - successful_items)
             summary = {
                 "total_items": len(items),
-                "successful_items": download_summary.get("downloaded", 0)
-                + download_summary.get("skipped", 0),
-                "failed_items": download_summary.get("failed", 0),
+                "successful_items": successful_items,
+                "failed_items": failed_items,
                 "skipped_items": skipped_count,
                 "total_pdfs_processed": 0,
                 "total_pages_extracted": 0,

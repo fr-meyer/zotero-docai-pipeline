@@ -560,13 +560,18 @@ class NoteFormatter:
                 # Multiple chunks (split occurred)
                 total_parts = len(chunks)
                 for part_num, chunk in enumerate(chunks, start=1):
-                    # Generate split title
+                    # Generate split title including PDF filename for clarity
+                    part_label = f"(Part {part_num} of {total_parts})"
                     split_title = (
-                        f"Page {page.page_number} (Part {part_num} of {total_parts})"
+                        f"Page {page.page_number} {part_label} -\n{pdf_filename} -\nOCR"
+                    )
+                    split_heading = (
+                        f"# Page {page.page_number} {part_label} -\n"
+                        f"# {pdf_filename} -\n# OCR"
                     )
 
                     # Prepend split title heading before existing chunk content
-                    # Optionally remove the initial base page heading if it
+                    # Optionally remove the initial base heading if it
                     # matches the original pattern
                     escaped_filename = re.escape(pdf_filename)
                     base_heading_pattern = (
@@ -596,13 +601,13 @@ class NoteFormatter:
                         )
                         # Prepend split title heading
                         chunk_with_updated_heading = (
-                            f"# {split_title}\n\n{chunk_without_base_heading}"
+                            f"{split_heading}\n\n{chunk_without_base_heading}"
                         )
                     else:
                         # Chunk doesn't start with base page heading, prepend
                         # split title heading. This preserves all existing
                         # headers (including section headers)
-                        chunk_with_updated_heading = f"# {split_title}\n\n{chunk}"
+                        chunk_with_updated_heading = f"{split_heading}\n\n{chunk}"
 
                     payload = NotePayload(
                         parent_item_key=parent_item_key,

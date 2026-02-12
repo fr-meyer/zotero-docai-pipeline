@@ -266,14 +266,14 @@ class ItemProcessor:
                 )
 
                 # Store page contents for disk persistence
-                # (use attachment_key as dict key)
+                # (use filename as dict key)
                 if pdf_page_contents:
-                    page_contents[attachment_key] = pdf_page_contents
+                    page_contents[filename] = pdf_page_contents
 
                 # Store tree structure for disk persistence
-                # (use attachment_key as dict key)
+                # (use filename as dict key)
                 if tree:
-                    pdf_trees[attachment_key] = tree
+                    pdf_trees[filename] = tree
 
                 total_pages += pages_extracted
                 total_notes += notes_created

@@ -72,7 +72,7 @@ class ItemProcessor:
 
     Attributes:
         zotero_client: Client for interacting with Zotero API.
-        mistral_client: Client for interacting with Mistral AI OCR API.
+        ocr_client: Client for interacting with OCR API.
         config: Processing configuration (batch size, skip empty pages, etc.).
         logger: Logger instance for this processor.
         tree_processor: Optional TreeStructureProcessor for document tree extraction.
@@ -107,7 +107,7 @@ class ItemProcessor:
                 If None, tree extraction is skipped.
 
         Raises:
-            AssertionError: If batch_size exceeds 50 (Zotero API limit).
+            ValueError: If batch_size exceeds 50 (Zotero API limit).
         """
         self.zotero_client = zotero_client
         self.ocr_client = ocr_client
@@ -266,14 +266,14 @@ class ItemProcessor:
                 )
 
                 # Store page contents for disk persistence
-                # (use filename as dict key)
+                # (use attachment_key as dict key)
                 if pdf_page_contents:
-                    page_contents[filename] = pdf_page_contents
+                    page_contents[attachment_key] = pdf_page_contents
 
                 # Store tree structure for disk persistence
-                # (use filename as dict key)
+                # (use attachment_key as dict key)
                 if tree:
-                    pdf_trees[filename] = tree
+                    pdf_trees[attachment_key] = tree
 
                 total_pages += pages_extracted
                 total_notes += notes_created

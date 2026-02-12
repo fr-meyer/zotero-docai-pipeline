@@ -1361,7 +1361,7 @@ class Pipeline:
             item: Dictionary containing item metadata (key, title, tags, attachments).
             result: ProcessingResult object with processing metrics, errors,
             and page contents. item_trees: Optional dictionary mapping
-            pdf_filename → DocumentTree for tree structures
+            attachment_key → DocumentTree for tree structures
                 to save to disk. If None or empty, tree structures are not saved.
 
         Returns:
@@ -1394,9 +1394,22 @@ class Pipeline:
             summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
             self.logger.debug(f"Saved processing summary to {summary_path}")
 
+            # Map attachment_key → filename for safe filenames on disk
+            attachment_filename_map: dict[str, str] = {
+                att["key"]: att["filename"]
+                for att in item.get("attachments", [])
+                if att.get("key") and att.get("filename")
+            }
+
             # Save markdown content files if available
             if result.page_contents:
-                for pdf_filename, page_contents_list in result.page_contents.items():
+                for attachment_key, page_contents_list in result.page_contents.items():
+                    pdf_filename = attachment_filename_map.get(attachment_key)
+                    if not pdf_filename:
+                        self.logger.warning(
+                            f"No filename found for attachment {attachment_key}"
+                        )
+                        continue
                     # Create safe filename by removing/replacing problematic characters
                     safe_pdf_name = pdf_filename.replace("/", "_").replace("\\", "_")
                     # Remove .pdf extension if present for cleaner filenames
@@ -1433,17 +1446,15 @@ class Pipeline:
 
             # Save tree structure files if available
             if item_trees and self.tree_processor:
-                for pdf_filename, tree in item_trees.items():
-                    try:
-                        # Create safe filename by removing/replacing
-                        # problematic characters
-                        safe_pdf_name = pdf_filename.replace("/", "_").replace(
-                            "\\", "_"
+                for attachment_key, tree in item_trees.items():
+                    pdf_filename = attachment_filename_map.get(attachment_key)
+                    if not pdf_filename:
+                        self.logger.warning(
+                            f"No filename found for attachment {attachment_key}, "
+                            "skipping tree structure save"
                         )
-                        # Remove .pdf extension if present for cleaner filenames
-                        if safe_pdf_name.lower().endswith(".pdf"):
-                            safe_pdf_name = safe_pdf_name[:-4]
-
+                        continue
+                    try:
                         # Save tree structure using
                         # TreeStructureProcessor.save_to_disk()
                         self.tree_processor.save_to_disk(tree, item_dir, pdf_filename)
@@ -1927,17 +1938,20 @@ class Pipeline:
                     item_trees: dict[str, DocumentTree] = {}
                     if result.item_key in self.uploaded_docs_map:
                         for uploaded_doc in self.uploaded_docs_map[result.item_key]:
-                            if uploaded_doc.doc_id in self._tree_structures:
-                                item_trees[uploaded_doc.filename] = (
+                            if (
+                                uploaded_doc.attachment_key is not None
+                                and uploaded_doc.doc_id in self._tree_structures
+                            ):
+                                item_trees[uploaded_doc.attachment_key] = (
                                     self._tree_structures[uploaded_doc.doc_id]
                                 )
 
                     # Merge result.tree_structures into item_trees (prefer
                     # result.tree_structures as fallback)
                     if result.tree_structures:
-                        for pdf_filename, tree in result.tree_structures.items():
-                            if pdf_filename not in item_trees:
-                                item_trees[pdf_filename] = tree
+                        for attachment_key, tree in result.tree_structures.items():
+                            if attachment_key not in item_trees:
+                                item_trees[attachment_key] = tree
 
                     self.logger.debug(
                         f"Prepared {len(item_trees)} trees for item {item['key']}"

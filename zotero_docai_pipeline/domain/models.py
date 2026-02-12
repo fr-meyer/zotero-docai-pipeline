@@ -56,12 +56,15 @@ class ProcessingResult:
     processing, and note creation."""
 
     page_contents: dict[str, list[PageContent]] | None = None
-    """Optional mapping of PDF filename to list of PageContent objects. Used
-    for disk persistence of markdown content. None if not collected."""
+    """Optional mapping of attachment_key to list of PageContent objects. Used
+    for disk persistence of markdown content. Keys are Zotero attachment keys
+    (unique per attachment) to avoid collisions when multiple attachments share
+    the same filename. None if not collected."""
 
     tree_structures: dict[str, DocumentTree] | None = None
-    """Optional mapping of PDF filename to DocumentTree objects. Used for disk
-    persistence of tree structures. None if not collected."""
+    """Optional mapping of attachment_key to DocumentTree objects. Used for disk
+    persistence of tree structures. Keys are Zotero attachment keys (unique per
+    attachment) to avoid collisions. None if not collected."""
 
 
 @dataclass

@@ -44,12 +44,15 @@ Example usage:
 import re
 import warnings
 
+from zotero_docai_pipeline.domain.config import ConfigError
 from zotero_docai_pipeline.domain.models import (
     NotePayload,
     PageContent,
 )
 from zotero_docai_pipeline.domain.note_validator import NoteValidator
 from zotero_docai_pipeline.domain.table_converter import convert_markdown_tables_to_csv
+
+ALLOWED_EXTRACTION_MODES = frozenset({"all_at_once", "page_by_page"})
 
 
 class NoteFormatter:
@@ -432,6 +435,8 @@ class NoteFormatter:
             skip_empty_pages is True.
 
         Raises:
+            ConfigError: When extraction_mode is not one of
+                ``all_at_once`` or ``page_by_page``.
             NoteSizeExceededError: When content exceeds threshold and
                 auto_split is False.
 
@@ -461,6 +466,11 @@ class NoteFormatter:
             >>> len(notes) > 1  # Split into multiple notes
             True
         """
+        if extraction_mode not in ALLOWED_EXTRACTION_MODES:
+            raise ConfigError(
+                f"extraction_mode must be one of {sorted(ALLOWED_EXTRACTION_MODES)}, "
+                f"got {extraction_mode!r}"
+            )
         if extraction_mode == "all_at_once":
             return NoteFormatter._format_all_pages_at_once(
                 pages,
@@ -470,9 +480,8 @@ class NoteFormatter:
                 size_threshold,
                 skip_empty_pages,
             )
-        else:  # page_by_page (legacy)
-            # Existing implementation continues below
-            result = []
+        # extraction_mode == "page_by_page"
+        result = []
 
         # Process each page
         for page in pages:

@@ -1,0 +1,32 @@
+# Tree structure processing configuration
+# Controls whether and how document tree structures are extracted and saved
+
+# Enable/disable tree structure extraction
+# When enabled, tree structures are extracted during OCR processing and saved to disk
+# as JSON files in the format: {item_dir}/{pdf_name}_tree_structure.json
+# The tree structure represents the document's hierarchical organization (e.g., table
+# of contents, section headings, nested document structure) and enables navigation
+# and structured content extraction.
+enabled: true
+
+# Tree structure provider (currently only "pageindex" is supported)
+# Other OCR providers may support tree extraction in future versions
+provider: pageindex
+
+# Tree node options - control what information is included in tree nodes
+# These options balance information content with storage efficiency and performance
+
+# Include unique node IDs for programmatic navigation and referencing
+node_id: true
+
+# Include node summaries (condensed overviews) without full text content
+summary: true
+
+# Include full text content in tree nodes
+# WARNING: Setting this to true significantly increases tree structure size and
+# may impact performance. Only enable when full text content is required for
+# downstream processing. Default is false to optimize storage and performance.
+text: false
+
+# Include document description/metadata in tree structure
+description: true

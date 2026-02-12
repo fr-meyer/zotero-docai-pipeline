@@ -1,0 +1,18 @@
+defaults:
+  - zotero: default
+  - ocr: pageindex
+  - processing: default
+  - storage: default
+  - tree_structure: default
+  - download: default
+  - _self_
+
+# Hydra runtime configuration
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    chdir: true
+
+zotero:
+  library_id: "${oc.env:ZOTERO_LIBRARY_ID}"

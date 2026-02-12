@@ -1,0 +1,34 @@
+# PageIndex OCR configuration
+# This file defines default values for PageIndexOCRConfig
+# Values can be overridden via command line or config overrides
+
+provider: pageindex
+
+# Whether OCR processing is enabled. When false, only PDF download will occur.
+enabled: false
+
+# API configuration
+api_key: ${oc.env:PAGEINDEX_API_KEY,}
+# Base URL for PageIndex API
+base_url: "https://api.pageindex.ai"
+
+# use_sdk: Use PageIndex SDK instead of HTTP API (false = HTTP API, true = SDK)
+# Both HTTP API and SDK modes are production-ready. Setting use_sdk: true enables
+# the PageIndex SDK with full support for upload, OCR retrieval, and cleanup operations.
+use_sdk: true
+
+# Batch processing configuration
+# batch_upload_enabled: Enables batch upload optimization (upload all, then poll all)
+batch_upload_enabled: true
+
+# Polling configuration (exponential backoff: 2s → 4s → 8s → 16s → 30s max)
+# polling_initial_interval: Starting interval in seconds
+polling_initial_interval: 2
+# polling_max_interval: Maximum interval cap in seconds
+polling_max_interval: 30
+# polling_timeout: Overall timeout in seconds (5 minutes)
+polling_timeout: 300
+# polling_max_attempts: Maximum polling attempts per document
+polling_max_attempts: 20
+# polling_batch_delay: Delay between batch document processing
+polling_batch_delay: 1

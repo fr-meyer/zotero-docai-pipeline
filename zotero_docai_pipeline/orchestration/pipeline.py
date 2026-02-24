@@ -1686,6 +1686,62 @@ class Pipeline:
                 "tag_adding_eligible": 0,
             }
 
+        # Early exit for standalone tag-adding mode
+        if (
+            self.tag_adding_config.enabled
+            and not self.ocr_config.enabled
+            and not self.download_config.enabled
+        ):
+            self.logger.info(
+                "Standalone tag-adding mode: OCR and download disabled"
+            )
+            log_tag_adding_start(
+                self.logger, len(items), len(self.tag_adding_config.tags)
+            )
+            tag_adding_results = self._apply_tag_adding(items)
+            tag_adding_failed = sum(
+                1 for r in tag_adding_results if r.tags_failed
+            )
+            tag_adding_succeeded = sum(
+                1 for r in tag_adding_results if not r.tags_failed
+            )
+            tag_adding_matched = len(tag_adding_results)
+            total_time = time.time() - start_time
+
+            unmatched = len(items) - tag_adding_matched
+            successful_items = unmatched + tag_adding_succeeded
+            failed_items = tag_adding_failed
+
+            summary = {
+                "total_items": len(items),
+                "successful_items": successful_items,
+                "failed_items": failed_items,
+                "skipped_items": skipped_count,
+                "total_pdfs_processed": 0,
+                "total_pages_extracted": 0,
+                "total_notes_created": 0,
+                "total_time": total_time,
+                "results": [],
+                "tag_adding_results": tag_adding_results,
+                "tag_adding_failed": tag_adding_failed,
+                "tag_adding_matched": tag_adding_matched,
+                "tag_adding_succeeded": tag_adding_succeeded,
+                "tag_adding_eligible": len(items),
+            }
+
+            # Log completion
+            log_completion(self.logger)
+
+            self.logger.info("=" * 80)
+            self.logger.info(
+                f"Pipeline completed in {total_time:.1f}s: "
+                f"Tag Adding matched {tag_adding_matched}/{len(items)} items, "
+                f"{tag_adding_succeeded} succeeded, {tag_adding_failed} failed"
+            )
+            self.logger.info("=" * 80)
+
+            return summary
+
         # ========================================================================
         # Phase 1: Collect & Upload PDFs
         # ========================================================================
@@ -1828,142 +1884,85 @@ class Pipeline:
 
             return summary
 
-        # Early exit for standalone tag-adding mode
-        if (
-            self.tag_adding_config.enabled
-            and not self.ocr_config.enabled
-            and not self.download_config.enabled
-        ):
+        # Read PDFs from disk if download is enabled
+        if self.download_config.enabled and self._download_path_mapping:
+            pdfs = self._read_pdfs_from_disk(self._download_path_mapping)
+            self.logger.info(f"Reading {len(pdfs)} PDFs from disk for OCR upload")
+
+        # Handle empty PDFs case
+        if not pdfs:
+            self.logger.warning(
+                "No PDFs collected from items, skipping to Phase 3 with "
+                "empty results"
+            )
+            phase1_time = time.time() - phase1_start_time
             self.logger.info(
-                "Standalone tag-adding mode: OCR and download disabled"
+                f"Phase 1 completed in {phase1_time:.1f}s: 0 PDFs uploaded"
             )
-            log_tag_adding_start(
-                self.logger, len(items), len(self.tag_adding_config.tags)
-            )
-            tag_adding_results = self._apply_tag_adding(items)
-            tag_adding_failed = sum(
-                1 for r in tag_adding_results if r.tags_failed
-            )
-            tag_adding_succeeded = sum(
-                1 for r in tag_adding_results if not r.tags_failed
-            )
-            tag_adding_matched = len(tag_adding_results)
-            total_time = time.time() - start_time
-
-            unmatched = len(items) - tag_adding_matched
-            successful_items = unmatched + tag_adding_succeeded
-            failed_items = tag_adding_failed
-
-            summary = {
-                "total_items": len(items),
-                "successful_items": successful_items,
-                "failed_items": failed_items,
-                "skipped_items": skipped_count,
-                "total_pdfs_processed": 0,
-                "total_pages_extracted": 0,
-                "total_notes_created": 0,
-                "total_time": total_time,
-                "results": [],
-                "tag_adding_results": tag_adding_results,
-                "tag_adding_failed": tag_adding_failed,
-                "tag_adding_matched": tag_adding_matched,
-                "tag_adding_succeeded": tag_adding_succeeded,
-                "tag_adding_eligible": len(items),
-            }
-
-            # Log completion
-            log_completion(self.logger)
-
-            self.logger.info("=" * 80)
-            self.logger.info(
-                f"Pipeline completed in {total_time:.1f}s: "
-                f"Tag Adding matched {tag_adding_matched}/{len(items)} items, "
-                f"{tag_adding_succeeded} succeeded, {tag_adding_failed} failed"
-            )
-            self.logger.info("=" * 80)
-
-            return summary
-
+            ocr_results = {}
+            uploaded_docs_map = {}
+            self.uploaded_docs_map = uploaded_docs_map
+            # Skip Phase 2 and go directly to Phase 3
         else:
-            # Read PDFs from disk if download is enabled
-            if self.download_config.enabled and self._download_path_mapping:
-                pdfs = self._read_pdfs_from_disk(self._download_path_mapping)
-                self.logger.info(f"Reading {len(pdfs)} PDFs from disk for OCR upload")
+            # Upload PDFs in batch
+            uploaded_docs_map = self._upload_pdfs_batch(pdfs)
+            self.uploaded_docs_map = uploaded_docs_map
 
-            # Handle empty PDFs case
-            if not pdfs:
-                self.logger.warning(
-                    "No PDFs collected from items, skipping to Phase 3 with "
-                    "empty results"
-                )
+            # Handle upload failure - create failed ProcessingResult
+            # entries and continue
+            if not uploaded_docs_map or not any(uploaded_docs_map.values()):
+                self.logger.error("Batch upload failed: no documents uploaded")
                 phase1_time = time.time() - phase1_start_time
                 self.logger.info(
                     f"Phase 1 completed in {phase1_time:.1f}s: 0 PDFs uploaded"
                 )
+                # Set empty results to skip Phase 2 and proceed to Phase 3
                 ocr_results = {}
-                uploaded_docs_map = {}
-                self.uploaded_docs_map = uploaded_docs_map
-                # Skip Phase 2 and go directly to Phase 3
+                # Keep uploaded_docs_map empty so Phase 3 will create failed results
             else:
-                # Upload PDFs in batch
-                uploaded_docs_map = self._upload_pdfs_batch(pdfs)
-                self.uploaded_docs_map = uploaded_docs_map
+                # Extract all uploaded documents into flat list for Phase 2
+                all_uploaded_docs = [
+                    doc for docs in uploaded_docs_map.values() for doc in docs
+                ]
 
-                # Handle upload failure - create failed ProcessingResult
-                # entries and continue
-                if not uploaded_docs_map or not any(uploaded_docs_map.values()):
-                    self.logger.error("Batch upload failed: no documents uploaded")
-                    phase1_time = time.time() - phase1_start_time
-                    self.logger.info(
-                        f"Phase 1 completed in {phase1_time:.1f}s: 0 PDFs uploaded"
+                phase1_time = time.time() - phase1_start_time
+                self.logger.info(
+                    f"Phase 1 completed in {phase1_time:.1f}s: "
+                    f"{len(all_uploaded_docs)} PDFs uploaded successfully"
+                )
+
+                # ===========================================================
+                # Phase 2: Batch Poll OCR Results
+                # ===========================================================
+                self.logger.info("=" * 80)
+                self.logger.info(
+                    f"Phase 2: Polling OCR results for "
+                    f"{len(all_uploaded_docs)} documents"
+                )
+                self.logger.info("=" * 80)
+                phase2_start_time = time.time()
+
+                ocr_results = self._poll_ocr_results_batch(all_uploaded_docs)
+
+                # Handle polling failure (log warning but continue to Phase 3)
+                phase2_time = time.time() - phase2_start_time
+                if not ocr_results:
+                    self.logger.warning(
+                        "Batch polling failed: no OCR results available"
                     )
-                    # Set empty results to skip Phase 2 and proceed to Phase 3
-                    ocr_results = {}
-                    # Keep uploaded_docs_map empty so Phase 3 will create failed results
+                    self.logger.info(
+                        f"Phase 2 completed in {phase2_time:.1f}s: "
+                        f"0/{len(all_uploaded_docs)} documents processed "
+                        f"successfully"
+                    )
                 else:
-                    # Extract all uploaded documents into flat list for Phase 2
-                    all_uploaded_docs = [
-                        doc for docs in uploaded_docs_map.values() for doc in docs
-                    ]
-
-                    phase1_time = time.time() - phase1_start_time
+                    success_count = len(ocr_results)
+                    total_count = len(all_uploaded_docs)
                     self.logger.info(
-                        f"Phase 1 completed in {phase1_time:.1f}s: "
-                        f"{len(all_uploaded_docs)} PDFs uploaded successfully"
+                        f"Phase 2 completed in {phase2_time:.1f}s: "
+                        f"{success_count}/{total_count} documents "
+                        f"processed successfully"
                     )
-
-                    # ===========================================================
-                    # Phase 2: Batch Poll OCR Results
-                    # ===========================================================
-                    self.logger.info("=" * 80)
-                    self.logger.info(
-                        f"Phase 2: Polling OCR results for "
-                        f"{len(all_uploaded_docs)} documents"
-                    )
-                    self.logger.info("=" * 80)
-                    phase2_start_time = time.time()
-
-                    ocr_results = self._poll_ocr_results_batch(all_uploaded_docs)
-
-                    # Handle polling failure (log warning but continue to Phase 3)
-                    phase2_time = time.time() - phase2_start_time
-                    if not ocr_results:
-                        self.logger.warning(
-                            "Batch polling failed: no OCR results available"
-                        )
-                        self.logger.info(
-                            f"Phase 2 completed in {phase2_time:.1f}s: "
-                            f"0/{len(all_uploaded_docs)} documents processed "
-                            f"successfully"
-                        )
-                    else:
-                        success_count = len(ocr_results)
-                        total_count = len(all_uploaded_docs)
-                        self.logger.info(
-                            f"Phase 2 completed in {phase2_time:.1f}s: "
-                            f"{success_count}/{total_count} documents "
-                            f"processed successfully"
-                        )
 
         # ========================================================================
         # Phase 3: Extracting tree structures

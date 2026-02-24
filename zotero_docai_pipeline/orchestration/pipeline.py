@@ -66,6 +66,7 @@ from zotero_docai_pipeline.domain.config import (
     OCRProviderConfig,
     ProcessingConfig,
     StorageConfig,
+    TagAddingConfig,
     TreeStructureConfig,
     ZoteroConfig,
 )
@@ -73,6 +74,7 @@ from zotero_docai_pipeline.domain.models import (
     DocumentTree,
     PageContent,
     ProcessingResult,
+    TagAddingResult,
     UploadedDocument,
 )
 from zotero_docai_pipeline.domain.tree_processor import TreeStructureProcessor
@@ -84,8 +86,11 @@ from zotero_docai_pipeline.utils.logging import (
     log_error,
     log_skipped_item,
     log_startup,
+    log_tag_adding_result,
+    log_tag_adding_start,
     log_tagging,
 )
+from zotero_docai_pipeline.utils.text import normalize_title
 from zotero_docai_pipeline.utils.progress import ProgressBar
 from zotero_docai_pipeline.utils.retry import retry_with_backoff
 
@@ -141,6 +146,7 @@ class Pipeline:
         tree_structure_config: TreeStructureConfig,
         ocr_config: OCRProviderConfig,
         download_config: DownloadConfig,
+        tag_adding_config: TagAddingConfig,
         tree_processor: TreeStructureProcessor | None = None,
     ) -> None:
         """Initialize the Pipeline with dependencies.
@@ -157,6 +163,7 @@ class Pipeline:
             ocr_config: OCR provider configuration (used for tree client
             initialization).
             download_config: Configuration for PDF download feature.
+            tag_adding_config: Configuration for tag adding feature.
         """
         self.zotero_client = zotero_client
         self.ocr_client = ocr_client
@@ -167,6 +174,7 @@ class Pipeline:
         self.tree_structure_config = tree_structure_config
         self.ocr_config = ocr_config
         self.download_config = download_config
+        self.tag_adding_config = tag_adding_config
         self.logger = logging.getLogger(__name__)
         self._tree_structures: dict[str, DocumentTree] = {}
         self._download_path_mapping: dict[str, str] = {}
@@ -688,6 +696,61 @@ class Pipeline:
             f"Tagged {error_tagged_count} items with error tag, "
             f"{processed_tagged_count} items with processed tag"
         )
+
+    def _apply_tag_adding(
+        self, items: list[dict[str, Any]]
+    ) -> list[TagAddingResult]:
+        """Apply configured tags to items whose titles match the configured title list.
+
+        Iterates through items, matching titles against the configured titles
+        using normalized comparison. For each match, attempts to add all
+        configured tags via the Zotero API.
+
+        Args:
+            items: List of item dictionaries from _discover_items().
+
+        Returns:
+            List of TagAddingResult objects, one per matched item.
+        """
+        normalized_titles = {normalize_title(t) for t in self.tag_adding_config.titles}
+        results: list[TagAddingResult] = []
+
+        for item in items:
+            item_title = item.get("title", "")
+            item_key = item.get("key", "")
+
+            if normalize_title(item_title) not in normalized_titles:
+                continue
+
+            tags_added: list[str] = []
+            tags_failed: list[str] = []
+
+            for tag in self.tag_adding_config.tags:
+                try:
+                    self.zotero_client.add_tag(item_key, tag)
+                    tags_added.append(tag)
+                except ZoteroClientError as e:
+                    self.logger.warning(
+                        f"ZoteroClientError adding tag '{tag}' to {item_key}: {e}"
+                    )
+                    tags_failed.append(tag)
+                except Exception as e:
+                    self.logger.warning(
+                        f"Unexpected error adding tag '{tag}' to {item_key}: {e}"
+                    )
+                    tags_failed.append(tag)
+
+            result = TagAddingResult(
+                item_key=item_key,
+                item_title=item_title,
+                matched=True,
+                tags_added=tags_added,
+                tags_failed=tags_failed,
+            )
+            log_tag_adding_result(self.logger, result)
+            results.append(result)
+
+        return results
 
     def _collect_all_pdfs(
         self, items: list[dict[str, Any]]
@@ -1501,7 +1564,7 @@ class Pipeline:
                 f"{item.get('key', 'unknown')}: {e}"
             )
 
-    def run(self) -> dict[str, int | float | list[ProcessingResult]]:
+    def run(self) -> dict[str, Any]:
         """Execute the complete processing pipeline using batch processing.
 
         This method orchestrates the end-to-end batch processing workflow:
@@ -1567,6 +1630,15 @@ class Pipeline:
         else:
             self.logger.info("PDF download: DISABLED")
 
+        # Log tag adding status
+        if self.tag_adding_config.enabled:
+            self.logger.info(
+                f"Tag Adding: ENABLED ({len(self.tag_adding_config.tags)} tags, "
+                f"{len(self.tag_adding_config.titles)} titles)"
+            )
+        else:
+            self.logger.info("Tag Adding: DISABLED")
+
         # Validate tree extraction configuration for Mistral OCR
         if (
             self.tree_structure_config.enabled
@@ -1607,6 +1679,11 @@ class Pipeline:
                 "total_notes_created": 0,
                 "total_time": 0.0,
                 "results": [],
+                "tag_adding_results": [],
+                "tag_adding_failed": 0,
+                "tag_adding_matched": 0,
+                "tag_adding_succeeded": 0,
+                "tag_adding_eligible": 0,
             }
 
         # ========================================================================
@@ -1658,6 +1735,48 @@ class Pipeline:
                 items, download_summary, self._download_path_mapping
             )
 
+            # Tag adding in download-only mode
+            tag_adding_results: list[TagAddingResult] = []
+            tag_adding_failed = 0
+            tag_adding_matched = 0
+            tag_adding_succeeded = 0
+            tag_adding_eligible = 0
+
+            if self.tag_adding_config.enabled:
+                path_mapping = self._download_path_mapping
+                download_succeeded_items = []
+                for item in items:
+                    item_key = item.get("key", "")
+                    attachments = item.get("attachments", [])
+                    pdf_attachments = [
+                        att for att in attachments if self._is_pdf_attachment(att)
+                    ]
+                    if not pdf_attachments:
+                        continue
+                    all_succeeded = True
+                    for att in pdf_attachments:
+                        mapping_key = f"{item_key}:::{att.get('key', '')}"
+                        if mapping_key not in path_mapping:
+                            all_succeeded = False
+                            break
+                    if all_succeeded:
+                        download_succeeded_items.append(item)
+
+                tag_adding_eligible = len(download_succeeded_items)
+                log_tag_adding_start(
+                    self.logger,
+                    tag_adding_eligible,
+                    len(self.tag_adding_config.tags),
+                )
+                tag_adding_results = self._apply_tag_adding(download_succeeded_items)
+                tag_adding_failed = sum(
+                    1 for r in tag_adding_results if r.tags_failed
+                )
+                tag_adding_succeeded = sum(
+                    1 for r in tag_adding_results if not r.tags_failed
+                )
+                tag_adding_matched = len(tag_adding_results)
+
             # Return early with download-only summary (item-level from path_mapping)
             total_time = time.time() - start_time
             path_mapping = self._download_path_mapping
@@ -1683,6 +1802,12 @@ class Pipeline:
                 "total_pdfs_failed": download_summary.get("failed", 0),
             }
 
+            summary["tag_adding_results"] = tag_adding_results
+            summary["tag_adding_failed"] = tag_adding_failed
+            summary["tag_adding_matched"] = tag_adding_matched
+            summary["tag_adding_succeeded"] = tag_adding_succeeded
+            summary["tag_adding_eligible"] = tag_adding_eligible
+
             # Log completion
             log_completion(self.logger)
 
@@ -1702,6 +1827,63 @@ class Pipeline:
             self.logger.info("=" * 80)
 
             return summary
+
+        # Early exit for standalone tag-adding mode
+        if (
+            self.tag_adding_config.enabled
+            and not self.ocr_config.enabled
+            and not self.download_config.enabled
+        ):
+            self.logger.info(
+                "Standalone tag-adding mode: OCR and download disabled"
+            )
+            log_tag_adding_start(
+                self.logger, len(items), len(self.tag_adding_config.tags)
+            )
+            tag_adding_results = self._apply_tag_adding(items)
+            tag_adding_failed = sum(
+                1 for r in tag_adding_results if r.tags_failed
+            )
+            tag_adding_succeeded = sum(
+                1 for r in tag_adding_results if not r.tags_failed
+            )
+            tag_adding_matched = len(tag_adding_results)
+            total_time = time.time() - start_time
+
+            unmatched = len(items) - tag_adding_matched
+            successful_items = unmatched + tag_adding_succeeded
+            failed_items = tag_adding_failed
+
+            summary = {
+                "total_items": len(items),
+                "successful_items": successful_items,
+                "failed_items": failed_items,
+                "skipped_items": skipped_count,
+                "total_pdfs_processed": 0,
+                "total_pages_extracted": 0,
+                "total_notes_created": 0,
+                "total_time": total_time,
+                "results": [],
+                "tag_adding_results": tag_adding_results,
+                "tag_adding_failed": tag_adding_failed,
+                "tag_adding_matched": tag_adding_matched,
+                "tag_adding_succeeded": tag_adding_succeeded,
+                "tag_adding_eligible": len(items),
+            }
+
+            # Log completion
+            log_completion(self.logger)
+
+            self.logger.info("=" * 80)
+            self.logger.info(
+                f"Pipeline completed in {total_time:.1f}s: "
+                f"Tag Adding matched {tag_adding_matched}/{len(items)} items, "
+                f"{tag_adding_succeeded} succeeded, {tag_adding_failed} failed"
+            )
+            self.logger.info("=" * 80)
+
+            return summary
+
         else:
             # Read PDFs from disk if download is enabled
             if self.download_config.enabled and self._download_path_mapping:
@@ -1909,6 +2091,8 @@ class Pipeline:
         # Build item lookup map for post-processing
         item_map = {item.get("key", ""): item for item in items}
 
+        tag_adding_results_ocr: list[TagAddingResult] = []
+
         for result in results:
             item = item_map.get(result.item_key)
             if not item:
@@ -1933,6 +2117,11 @@ class Pipeline:
                     )
                     # Don't mark item as failed - processing succeeded, tag
                     # addition failed
+
+                if self.tag_adding_config.enabled:
+                    item_tag_results = self._apply_tag_adding([item])
+                    if item_tag_results:
+                        tag_adding_results_ocr.append(item_tag_results[0])
 
             # Handle failed results
             else:
@@ -2017,6 +2206,27 @@ class Pipeline:
             summary["total_pdfs_downloaded"] = download_summary.get("downloaded", 0)
             summary["total_pdfs_skipped"] = download_summary.get("skipped", 0)
             summary["total_pdfs_failed"] = download_summary.get("failed", 0)
+
+        # Add tag-adding metrics
+        if self.tag_adding_config.enabled:
+            tag_adding_failed_count = sum(
+                1 for r in tag_adding_results_ocr if r.tags_failed
+            )
+            summary["tag_adding_results"] = tag_adding_results_ocr
+            summary["tag_adding_failed"] = tag_adding_failed_count
+            summary["tag_adding_matched"] = len(tag_adding_results_ocr)
+            summary["tag_adding_succeeded"] = sum(
+                1 for r in tag_adding_results_ocr if not r.tags_failed
+            )
+            summary["tag_adding_eligible"] = sum(
+                1 for r in results if r.success
+            )
+        else:
+            summary["tag_adding_results"] = []
+            summary["tag_adding_failed"] = 0
+            summary["tag_adding_matched"] = 0
+            summary["tag_adding_succeeded"] = 0
+            summary["tag_adding_eligible"] = 0
 
         # Log completion
         log_completion(self.logger)

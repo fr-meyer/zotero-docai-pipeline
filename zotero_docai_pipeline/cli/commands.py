@@ -154,6 +154,16 @@ def _determine_exit_code(
         else:
             return 1  # Partial failure (some items succeeded)
 
+    # Check tag-adding failures
+    tag_adding_failed = summary.get("tag_adding_failed", 0)
+    if not isinstance(tag_adding_failed, int):
+        tag_adding_failed = 0
+    if tag_adding_failed > 0:
+        if successful_items == 0:
+            return 2  # Complete failure (no items succeeded)
+        else:
+            return 1  # Partial failure (some items succeeded)
+
     if failed_items == 0:
         return 0  # Success
     elif successful_items > 0:
@@ -305,6 +315,7 @@ def process_command(
         cfg.tree_structure,
         cfg.ocr,
         cfg.download,
+        cfg.tag_adding,
         tree_processor=tree_processor,
     )
     summary = pipeline.run()

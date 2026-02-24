@@ -6,16 +6,18 @@ after configuration validation and client initialization.
 """
 
 import logging
+from typing import Any
 
 from tabulate import tabulate
 
 from zotero_docai_pipeline.clients.ocr_client import OCRClient
 from zotero_docai_pipeline.clients.zotero_client import ZoteroClient
 from zotero_docai_pipeline.domain.config import AppConfig
-from zotero_docai_pipeline.domain.models import ProcessingResult
+from zotero_docai_pipeline.domain.models import ProcessingResult, TagAddingResult
 from zotero_docai_pipeline.domain.tree_processor import TreeStructureProcessor
 from zotero_docai_pipeline.orchestration.pipeline import Pipeline
 from zotero_docai_pipeline.orchestration.processor import ItemProcessor
+from zotero_docai_pipeline.utils.text import normalize_title
 from zotero_docai_pipeline.utils.logging import (
     _format_with_emoji,
     _supports_unicode,
@@ -114,11 +116,38 @@ def dry_run_command(
     else:
         logger.info("No items found to process")
 
+    if cfg.tag_adding.enabled and cfg.tag_adding.titles:
+        normalized_configured = {normalize_title(t) for t in cfg.tag_adding.titles}
+        matching_items = [
+            item
+            for item in items
+            if normalize_title(item.get("title", "")) in normalized_configured
+        ]
+
+        logger.info("")
+        formatted_header = _format_with_emoji(
+            "Tag Adding Preview:", "\U0001f3f7\ufe0f", "[TAG ADDING]"
+        )
+        logger.info(formatted_header)
+
+        if matching_items:
+            logger.info(
+                f"  {len(matching_items)} item(s) would be tagged with: "
+                f"{cfg.tag_adding.tags}"
+            )
+            for item in matching_items:
+                title = item.get("title", "Untitled")[:60]
+                logger.info(
+                    f'  - "{title}"  \u2192  tags: {list(cfg.tag_adding.tags)}'
+                )
+        else:
+            logger.info("  No items match the configured title list")
+
     return 0
 
 
 def _determine_exit_code(
-    summary: dict[str, int | float | list[ProcessingResult]],
+    summary: dict[str, Any],
 ) -> int:
     """Determine the appropriate exit code based on processing summary.
 
@@ -279,6 +308,51 @@ def _display_combined_summary(logger: logging.Logger, summary: dict) -> None:
     log_error_summary(logger, summary.get("results", []))
 
 
+def _display_tag_adding_summary(
+    logger: logging.Logger, tag_adding_results: list[TagAddingResult]
+) -> None:
+    """Display summary for tag-adding operations.
+
+    Displays a formatted table with per-item tag-adding outcomes including
+    which tags were added and which failed for each matched item.
+
+    Args:
+        logger: Logger instance for logging messages
+        tag_adding_results: List of TagAddingResult objects from tag-adding
+    """
+    logger.info("")
+    formatted_header = _format_with_emoji(
+        "Tag Adding Summary:", "\U0001f3f7\ufe0f", "[TAG ADDING]"
+    )
+    logger.info(formatted_header)
+
+    if not tag_adding_results:
+        logger.info("No items matched the configured title list")
+        return
+
+    table_data = [
+        [
+            result.item_title[:40],
+            ", ".join(result.tags_added),
+            ", ".join(result.tags_failed),
+        ]
+        for result in tag_adding_results
+    ]
+
+    tablefmt = "grid" if _supports_unicode() else "simple"
+    table_str = tabulate(
+        table_data,
+        headers=["Item Title", "Tags Added", "Tags Failed"],
+        tablefmt=tablefmt,
+    )
+    logger.info(table_str)
+
+    matched = len(tag_adding_results)
+    succeeded = sum(1 for r in tag_adding_results if not r.tags_failed)
+    failed = sum(1 for r in tag_adding_results if r.tags_failed)
+    logger.info(f"Matched: {matched} | Succeeded: {succeeded} | Failed: {failed}")
+
+
 def process_command(
     cfg: AppConfig,
     logger: logging.Logger,
@@ -321,18 +395,37 @@ def process_command(
     summary = pipeline.run()
 
     # Determine which mode is enabled for appropriate summary display
-    download_only = cfg.download.enabled and not cfg.ocr.enabled
+    tag_adding_only = (
+        cfg.tag_adding.enabled and not cfg.ocr.enabled and not cfg.download.enabled
+    )
+    download_only = (
+        cfg.download.enabled and not cfg.ocr.enabled and not cfg.tag_adding.enabled
+    )
+    download_and_tag = (
+        cfg.download.enabled and not cfg.ocr.enabled and cfg.tag_adding.enabled
+    )
     download_and_ocr = cfg.download.enabled and cfg.ocr.enabled
 
     # Route to appropriate summary display based on mode
-    if download_only:
-        # Display download-only summary with download statistics
+    if tag_adding_only:
+        _display_tag_adding_summary(
+            logger, summary.get("tag_adding_results", [])
+        )
+    elif download_only:
         _display_download_summary(logger, summary)
+    elif download_and_tag:
+        _display_download_summary(logger, summary)
+        _display_tag_adding_summary(
+            logger, summary.get("tag_adding_results", [])
+        )
     elif download_and_ocr:
-        # Display combined summary with both download and OCR results
         _display_combined_summary(logger, summary)
+        if cfg.tag_adding.enabled:
+            _display_tag_adding_summary(
+                logger, summary.get("tag_adding_results", [])
+            )
     else:
-        # Display OCR-only summary (backward compatible)
+        # OCR-only or OCR + tag-adding
         results = summary.get("results", [])
         skipped_items = summary.get("skipped_items", 0)
         total_time = summary.get("total_time", 0.0)
@@ -348,6 +441,11 @@ def process_command(
         log_summary_table(logger, results, skipped_items)
         log_timing_summary(logger, float(total_time))
         log_error_summary(logger, results)
+
+        if cfg.tag_adding.enabled:
+            _display_tag_adding_summary(
+                logger, summary.get("tag_adding_results", [])
+            )
 
     # Determine exit code based on summary
     return _determine_exit_code(summary)

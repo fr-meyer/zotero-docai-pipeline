@@ -140,8 +140,9 @@ def validate_flags(cfg: AppConfig) -> None:
     1. Mutually exclusive flags: processing.dry_run and download.enabled cannot
        both be True. Dry-run mode is for testing configuration without actual
        operations, while download is an actual operation.
-    2. At least one operation enabled: Either download.enabled or ocr.enabled
-       must be True. The pipeline requires at least one operation to perform.
+    2. At least one operation enabled: At least one of download.enabled,
+       ocr.enabled, or tag_adding.enabled must be True. The pipeline requires
+       at least one operation to perform.
 
     Args:
         cfg: Application configuration object

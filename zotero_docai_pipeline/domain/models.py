@@ -68,6 +68,29 @@ class ProcessingResult:
 
 
 @dataclass
+class TagAddingResult:
+    """Per-item outcome of a Tag Adding operation.
+
+    Kept separate from ProcessingResult to avoid mixing OCR and tag-adding concerns.
+    """
+
+    item_key: str
+    """Zotero item key identifier."""
+
+    item_title: str
+    """Item title for logging and display."""
+
+    matched: bool
+    """Whether the item title matched one of the configured titles."""
+
+    tags_added: list[str]
+    """Tags that were successfully added to the item."""
+
+    tags_failed: list[str]
+    """Tags that failed to be added to the item."""
+
+
+@dataclass
 class PageContent:
     """Represents extracted content from a single PDF page.
 

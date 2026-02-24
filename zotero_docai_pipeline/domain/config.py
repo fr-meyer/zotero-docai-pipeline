@@ -6,6 +6,7 @@ These schemas are registered with Hydra to enable validation and IDE autocomplet
 support for configuration values.
 """
 
+import logging
 from dataclasses import dataclass, field
 
 from hydra.core.config_store import ConfigStore
@@ -312,6 +313,32 @@ class DownloadConfig:
 
 
 @dataclass
+class TagAddingConfig:
+    """Configuration for the Tag Adding feature."""
+
+    enabled: bool = False
+    """Whether the Tag Adding feature is enabled."""
+
+    tags: list[str] = field(default_factory=list)
+    """Tags to apply to matched Zotero items."""
+
+    titles: list[str] = field(default_factory=list)
+    """Item titles to match for tag adding."""
+
+    def __post_init__(self) -> None:
+        """Validate tag adding configuration."""
+        if self.enabled and not self.tags:
+            raise ConfigError(
+                "tag_adding.tags cannot be empty when tag_adding is enabled. "
+                "Provide at least one tag to apply."
+            )
+        if self.enabled and not self.titles:
+            logging.getLogger(__name__).warning(
+                "tag_adding.titles is empty: no items will be matched for tag adding."
+            )
+
+
+@dataclass
 class TreeStructureConfig:
     """Configuration for document tree structure extraction and processing.
 
@@ -493,6 +520,9 @@ class AppConfig:
     download: DownloadConfig = field(default_factory=DownloadConfig)
     """PDF download feature configuration."""
 
+    tag_adding: TagAddingConfig = field(default_factory=TagAddingConfig)
+    """Tag Adding feature configuration."""
+
 
 def register_configs() -> None:
     """Register structured configs with Hydra.
@@ -515,6 +545,7 @@ def register_configs() -> None:
     cs.store(group="storage", name="default", node=StorageConfig)
     cs.store(group="tree_structure", name="default", node=TreeStructureConfig)
     cs.store(group="download", name="default", node=DownloadConfig)
+    cs.store(group="tag_adding", name="default", node=TagAddingConfig)
 
     # Register top-level config
     cs.store(name="config", node=AppConfig)

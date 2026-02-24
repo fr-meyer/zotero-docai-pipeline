@@ -27,6 +27,7 @@ from zotero_docai_pipeline.domain.config import (
     ProcessingConfig,
     RetryConfig,
     StorageConfig,
+    TagAddingConfig,
     TreeStructureConfig,
     ZoteroConfig,
     register_configs,
@@ -160,10 +161,10 @@ def validate_flags(cfg: AppConfig) -> None:
         )
 
     # Check at least one operation must be enabled
-    if not cfg.download.enabled and not cfg.ocr.enabled:
+    if not cfg.download.enabled and not cfg.ocr.enabled and not cfg.tag_adding.enabled:
         raise ConfigError(
             "Invalid configuration: at least one operation must be enabled. "
-            "Set download.enabled=true or ocr.enabled=true."
+            "Set download.enabled=true, ocr.enabled=true, or tag_adding.enabled=true."
         )
 
     logger.debug("Flag configuration validated successfully")
@@ -313,6 +314,7 @@ def main(cfg: DictConfig) -> int:
         # Construct RetryConfig from DictConfig before passing to DownloadConfig
         retry_config = RetryConfig(**cfg.download.retry)
         download_kw = {k: v for k, v in cfg.download.items() if k != "retry"}
+        tag_adding_config = TagAddingConfig(**cfg.tag_adding)
         app_cfg = AppConfig(
             zotero=ZoteroConfig(**cfg.zotero),
             ocr=ocr_config,
@@ -320,6 +322,7 @@ def main(cfg: DictConfig) -> int:
             storage=StorageConfig(**cfg.storage),
             tree_structure=tree_structure_config,
             download=DownloadConfig(retry=retry_config, **download_kw),
+            tag_adding=tag_adding_config,
         )
 
         # Validate flag configuration

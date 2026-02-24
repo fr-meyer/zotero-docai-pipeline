@@ -1,0 +1,6 @@
+# Tag Adding feature configuration
+# Controls whether and how tags are applied to matched Zotero items
+
+enabled: false
+tags: []
+titles: []

@@ -415,6 +415,14 @@ def process_command(
         _display_download_summary(logger, summary)
     elif download_and_tag:
         _display_download_summary(logger, summary)
+        eligible = summary.get("tag_adding_eligible", 0)
+        logger.info(
+            _format_with_emoji(
+                f"Eligible for Tag Adding (download succeeded): {eligible}",
+                "\U0001f3f7\ufe0f",
+                "[ELIGIBLE]",
+            )
+        )
         _display_tag_adding_summary(
             logger, summary.get("tag_adding_results", [])
         )

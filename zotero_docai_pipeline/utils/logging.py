@@ -640,7 +640,7 @@ def log_tag_adding_result(logger: logging.Logger, result: "TagAddingResult") -> 
     else:
         message = (
             f"Tag Adding OK for \"{result.item_title}\" ({result.item_key}): "
-            f"{len(result.tags_added)} tag(s) added"
+            f"{len(result.tags_added)} tag(s) applied"
         )
         formatted_message = _format_with_emoji(message, "✓", "[TAG ADDING OK]")
         logger.info(formatted_message)

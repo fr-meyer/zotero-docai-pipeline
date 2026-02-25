@@ -116,7 +116,7 @@ def dry_run_command(
         logger.info("No items found to process")
 
     if cfg.tag_adding.enabled and cfg.tag_adding.citation_keys:
-        configured_keys = {k.strip() for k in cfg.tag_adding.citation_keys}
+        configured_keys = {k.strip() for k in cfg.tag_adding.citation_keys if k.strip()}
         matching_items = [
             item
             for item in items
@@ -342,7 +342,7 @@ def _display_tag_adding_summary(
     tablefmt = "grid" if _supports_unicode() else "simple"
     table_str = tabulate(
         table_data,
-        headers=["Item Title", "Tags Added", "Tags Failed"],
+        headers=["Item Title", "Tags Applied", "Tags Failed"],
         tablefmt=tablefmt,
     )
     logger.info(table_str)

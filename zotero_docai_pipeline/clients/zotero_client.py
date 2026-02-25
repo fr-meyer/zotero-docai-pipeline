@@ -48,6 +48,32 @@ class ZoteroClient:
     """
 
     @staticmethod
+    def _extract_citation_key(item_data: dict[str, Any]) -> str | None:
+        """Extract citation key from item metadata.
+
+        Native Zotero 8+ ``citationKey`` field is checked first; if absent or
+        empty, the ``extra`` field is parsed for a ``Citation Key:`` line
+        (Better BibTeX convention).  Returns ``None`` if neither source
+        yields a value.
+        """
+        native = item_data.get("citationKey")
+        if isinstance(native, str):
+            native = native.strip()
+            if native:
+                return native
+
+        extra = item_data.get("extra", "")
+        if extra:
+            for line in extra.splitlines():
+                stripped = line.strip()
+                if stripped.lower().startswith("citation key:"):
+                    value = stripped[len("citation key:"):].strip()
+                    if value:
+                        return value
+
+        return None
+
+    @staticmethod
     def _format_note_identifier(note: NotePayload) -> str:
         """Format note identifier for logging.
 
@@ -92,9 +118,11 @@ class ZoteroClient:
             - title: Item title
             - tags: List of tag strings
             - attachments: List of attachment dicts with 'key' and 'filename'
-            - citation_key: str | None — Citation key parsed from the item's extra field
-              (Better BibTeX convention: "Citation Key: <key>"). None if no Citation Key
-              line is present in extra.
+            - citation_key: str | None — Citation key resolved from item metadata.
+              Native Zotero 8+ ``citationKey`` field is preferred when present and
+              non-empty; otherwise falls back to parsing the ``extra`` field for a
+              ``Citation Key: <key>`` line (Better BibTeX convention). ``None`` if
+              neither source yields a value.
 
         Raises:
             ZoteroAPIError: If API communication fails.
@@ -163,14 +191,7 @@ class ZoteroClient:
                     logger.warning(f"Failed to fetch children for item {item_key}: {e}")
                     pdf_attachments = []
 
-                citation_key = None
-                extra = item_data.get("extra", "")
-                if extra:
-                    for line in extra.splitlines():
-                        stripped = line.strip()
-                        if stripped.lower().startswith("citation key:"):
-                            citation_key = stripped[len("citation key:"):].strip()
-                            break
+                citation_key = ZoteroClient._extract_citation_key(item_data)
 
                 result.append(
                     {

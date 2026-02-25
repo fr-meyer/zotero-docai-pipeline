@@ -153,6 +153,7 @@ class ZoteroClient:
 
             # Enrich items with attachment information
             result = []
+
             for item in items:
                 if not isinstance(item, dict):
                     continue

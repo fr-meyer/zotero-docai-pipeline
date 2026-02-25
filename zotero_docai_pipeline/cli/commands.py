@@ -117,6 +117,7 @@ def dry_run_command(
 
     if cfg.tag_adding.enabled and cfg.tag_adding.citation_keys:
         configured_keys = {k.strip() for k in cfg.tag_adding.citation_keys if k.strip()}
+
         matching_items = [
             item
             for item in items
@@ -419,6 +420,13 @@ def process_command(
                 "[TAG ADDING]",
             )
         )
+        logger.info(
+            _format_with_emoji(
+                f"Items marked as processed: {summary.get('tag_adding_processed', 0)}",
+                "\U0001f3f7\ufe0f",
+                "[TAG ADDING]",
+            )
+        )
     elif download_only:
         _display_download_summary(logger, summary)
     elif download_and_tag:
@@ -438,6 +446,13 @@ def process_command(
         logger.info(
             _format_with_emoji(
                 f"Items without citation key (skipped): {no_key}",
+                "\U0001f3f7\ufe0f",
+                "[TAG ADDING]",
+            )
+        )
+        logger.info(
+            _format_with_emoji(
+                f"Items marked as processed: {summary.get('tag_adding_processed', 0)}",
                 "\U0001f3f7\ufe0f",
                 "[TAG ADDING]",
             )

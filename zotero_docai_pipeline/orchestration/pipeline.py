@@ -600,18 +600,22 @@ class Pipeline:
         items: list[dict[str, Any]],
         download_summary: dict[str, int],
         path_mapping: dict[str, str],
+        *,
+        apply_processed_tag: bool = True,
     ) -> None:
         """Tag items based on download success/failure status.
 
         Adds error tags to items with failed downloads (if error tagging is enabled)
-        and processed tags to items with all attachments successfully downloaded.
-        Processed tags are always applied regardless of error_tagging_enabled setting.
+        and, when ``apply_processed_tag`` is True, adds the output (processed) tag
+        to items with all attachments successfully downloaded.
 
         Args:
             items: List of item dictionaries from _discover_items().
             download_summary: Dictionary with 'downloaded', 'skipped', 'failed' counts.
             path_mapping: Dictionary mapping f"{item_key}_{attachment_key}" to
             file paths.
+            apply_processed_tag: When False, skip applying the output (processed) tag
+                to download-succeeded items.  Error tagging is unaffected.
 
         Note:
             When `items` is an empty list, the method returns immediately without making
@@ -681,23 +685,23 @@ class Pipeline:
                             all_attachments_succeeded = False
                             break
 
-                    if all_attachments_succeeded:
-                        # Always add processed tag when all attachments succeeded
+                    if all_attachments_succeeded and apply_processed_tag:
                         self.zotero_client.add_tag(
                             item_key, self.zotero_config.tags.output
                         )
                         processed_tagged_count += 1
                 else:
                     # Items with no PDF attachments are vacuously successful
-                    attachments = item.get("attachments", [])
-                    pdf_attachments = [
-                        att for att in attachments if self._is_pdf_attachment(att)
-                    ]
-                    if len(pdf_attachments) == 0:
-                        self.zotero_client.add_tag(
-                            item_key, self.zotero_config.tags.output
-                        )
-                        processed_tagged_count += 1
+                    if apply_processed_tag:
+                        attachments = item.get("attachments", [])
+                        pdf_attachments = [
+                            att for att in attachments if self._is_pdf_attachment(att)
+                        ]
+                        if len(pdf_attachments) == 0:
+                            self.zotero_client.add_tag(
+                                item_key, self.zotero_config.tags.output
+                            )
+                            processed_tagged_count += 1
             except ZoteroClientError as e:
                 self.logger.warning(f"Failed to tag item {item_key}: {e}")
 
@@ -1708,6 +1712,7 @@ class Pipeline:
                 "tag_adding_succeeded": 0,
                 "tag_adding_eligible": 0,
                 "tag_adding_no_key": 0,
+                "tag_adding_processed": 0,
             }
 
         # Early exit for standalone tag-adding mode
@@ -1723,6 +1728,28 @@ class Pipeline:
                 self.logger, len(items), len(self.tag_adding_config.tags)
             )
             tag_adding_results, no_key_count = self._apply_tag_adding(items)
+
+            # Apply output (processed) tag to fully-succeeded items
+            tag_adding_processed = 0
+            for result in tag_adding_results:
+                if not result.tags_failed:
+                    try:
+                        self.zotero_client.add_tag(
+                            result.item_key, self.zotero_config.tags.output
+                        )
+                        tag_adding_processed += 1
+                    except ZoteroClientError as e:
+                        result.tags_failed.append(self.zotero_config.tags.output)
+                        self.logger.warning(
+                            f"Failed to add processed tag to {result.item_key}: {e}"
+                        )
+                    except Exception as e:
+                        result.tags_failed.append(self.zotero_config.tags.output)
+                        self.logger.warning(
+                            f"Failed to add processed tag to {result.item_key}: {e}"
+                        )
+
+            # Recompute after possible mutations
             tag_adding_failed = sum(
                 1 for r in tag_adding_results if r.tags_failed
             )
@@ -1752,6 +1779,7 @@ class Pipeline:
                 "tag_adding_succeeded": tag_adding_succeeded,
                 "tag_adding_eligible": len(items),
                 "tag_adding_no_key": no_key_count,
+                "tag_adding_processed": tag_adding_processed,
             }
 
             # Log completion
@@ -1813,7 +1841,8 @@ class Pipeline:
         if self.download_config.enabled and not self.ocr_config.enabled:
             self.logger.info("Download-only mode: OCR disabled, skipping OCR phases")
             self._tag_items_based_on_download(
-                items, download_summary, self._download_path_mapping
+                items, download_summary, self._download_path_mapping,
+                apply_processed_tag=not self.tag_adding_config.enabled,
             )
 
             # Compute items that succeeded download (includes no-PDF items as vacuously successful)
@@ -1843,6 +1872,7 @@ class Pipeline:
             tag_adding_matched = 0
             tag_adding_succeeded = 0
             tag_adding_eligible = 0
+            tag_adding_processed = 0
             no_key_count = 0
 
             if self.tag_adding_config.enabled:
@@ -1853,6 +1883,27 @@ class Pipeline:
                     len(self.tag_adding_config.tags),
                 )
                 tag_adding_results, no_key_count = self._apply_tag_adding(download_succeeded_items)
+
+                # Apply output (processed) tag to fully-succeeded items
+                for result in tag_adding_results:
+                    if not result.tags_failed:
+                        try:
+                            self.zotero_client.add_tag(
+                                result.item_key, self.zotero_config.tags.output
+                            )
+                            tag_adding_processed += 1
+                        except ZoteroClientError as e:
+                            result.tags_failed.append(self.zotero_config.tags.output)
+                            self.logger.warning(
+                                f"Failed to add processed tag to {result.item_key}: {e}"
+                            )
+                        except Exception as e:
+                            result.tags_failed.append(self.zotero_config.tags.output)
+                            self.logger.warning(
+                                f"Failed to add processed tag to {result.item_key}: {e}"
+                            )
+
+                # Recompute after possible mutations
                 tag_adding_failed = sum(
                     1 for r in tag_adding_results if r.tags_failed
                 )
@@ -1886,6 +1937,7 @@ class Pipeline:
             summary["tag_adding_succeeded"] = tag_adding_succeeded
             summary["tag_adding_eligible"] = tag_adding_eligible
             summary["tag_adding_no_key"] = no_key_count
+            summary["tag_adding_processed"] = tag_adding_processed
 
             # Log completion
             log_completion(self.logger)

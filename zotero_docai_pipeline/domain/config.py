@@ -323,8 +323,11 @@ class TagAddingConfig:
 
     citation_keys: list[str] = field(default_factory=list)
     """Citation keys to match for tag adding. Each entry must exactly match
-    (case-sensitive, whitespace-trimmed) the Citation Key found in a Zotero
-    item's extra field."""
+    (case-sensitive, whitespace-trimmed) the citation key resolved from a
+    Zotero item using the following precedence:
+    1. Native Zotero 8+ field: ``item["data"]["citationKey"]`` (preferred when present and non-empty).
+    2. Legacy Better BibTeX fallback: a ``Citation Key: <key>`` line in ``item["data"]["extra"]``.
+    """
 
     def __post_init__(self) -> None:
         """Validate tag adding configuration."""

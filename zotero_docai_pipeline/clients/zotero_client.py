@@ -63,7 +63,7 @@ class ZoteroClient:
                 return native
 
         extra = item_data.get("extra", "")
-        if extra:
+        if isinstance(extra, str) and extra:
             for line in extra.splitlines():
                 stripped = line.strip()
                 if stripped.lower().startswith("citation key:"):

@@ -1822,6 +1822,7 @@ class Pipeline:
                         att for att in attachments if self._is_pdf_attachment(att)
                     ]
                     if not pdf_attachments:
+                        download_succeeded_items.append(item)
                         continue
                     all_succeeded = True
                     for att in pdf_attachments:

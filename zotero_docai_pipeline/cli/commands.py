@@ -327,7 +327,7 @@ def _display_tag_adding_summary(
     logger.info(formatted_header)
 
     if not tag_adding_results:
-        logger.info("No items matched the configured title list")
+        logger.info("No items matched the configured citation key list")
         return
 
     table_data = [
@@ -411,6 +411,14 @@ def process_command(
         _display_tag_adding_summary(
             logger, summary.get("tag_adding_results", [])
         )
+        no_key = summary.get("tag_adding_no_key", 0)
+        logger.info(
+            _format_with_emoji(
+                f"Items without citation key (skipped): {no_key}",
+                "\U0001f3f7\ufe0f",
+                "[TAG ADDING]",
+            )
+        )
     elif download_only:
         _display_download_summary(logger, summary)
     elif download_and_tag:
@@ -426,11 +434,27 @@ def process_command(
         _display_tag_adding_summary(
             logger, summary.get("tag_adding_results", [])
         )
+        no_key = summary.get("tag_adding_no_key", 0)
+        logger.info(
+            _format_with_emoji(
+                f"Items without citation key (skipped): {no_key}",
+                "\U0001f3f7\ufe0f",
+                "[TAG ADDING]",
+            )
+        )
     elif download_and_ocr:
         _display_combined_summary(logger, summary)
         if cfg.tag_adding.enabled:
             _display_tag_adding_summary(
                 logger, summary.get("tag_adding_results", [])
+            )
+            no_key = summary.get("tag_adding_no_key", 0)
+            logger.info(
+                _format_with_emoji(
+                    f"Items without citation key (skipped): {no_key}",
+                    "\U0001f3f7\ufe0f",
+                    "[TAG ADDING]",
+                )
             )
     else:
         # OCR-only or OCR + tag-adding
@@ -453,6 +477,14 @@ def process_command(
         if cfg.tag_adding.enabled:
             _display_tag_adding_summary(
                 logger, summary.get("tag_adding_results", [])
+            )
+            no_key = summary.get("tag_adding_no_key", 0)
+            logger.info(
+                _format_with_emoji(
+                    f"Items without citation key (skipped): {no_key}",
+                    "\U0001f3f7\ufe0f",
+                    "[TAG ADDING]",
+                )
             )
 
     # Determine exit code based on summary

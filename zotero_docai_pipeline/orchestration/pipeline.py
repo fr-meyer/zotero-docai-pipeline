@@ -687,6 +687,17 @@ class Pipeline:
                             item_key, self.zotero_config.tags.output
                         )
                         processed_tagged_count += 1
+                else:
+                    # Items with no PDF attachments are vacuously successful
+                    attachments = item.get("attachments", [])
+                    pdf_attachments = [
+                        att for att in attachments if self._is_pdf_attachment(att)
+                    ]
+                    if len(pdf_attachments) == 0:
+                        self.zotero_client.add_tag(
+                            item_key, self.zotero_config.tags.output
+                        )
+                        processed_tagged_count += 1
             except ZoteroClientError as e:
                 self.logger.warning(f"Failed to tag item {item_key}: {e}")
 
@@ -1804,6 +1815,27 @@ class Pipeline:
                 items, download_summary, self._download_path_mapping
             )
 
+            # Compute items that succeeded download (includes no-PDF items as vacuously successful)
+            path_mapping = self._download_path_mapping
+            download_succeeded_items = []
+            for item in items:
+                item_key = item.get("key", "")
+                attachments = item.get("attachments", [])
+                pdf_attachments = [
+                    att for att in attachments if self._is_pdf_attachment(att)
+                ]
+                if not pdf_attachments:
+                    download_succeeded_items.append(item)
+                    continue
+                all_succeeded = True
+                for att in pdf_attachments:
+                    mapping_key = f"{item_key}:::{att.get('key', '')}"
+                    if mapping_key not in path_mapping:
+                        all_succeeded = False
+                        break
+                if all_succeeded:
+                    download_succeeded_items.append(item)
+
             # Tag adding in download-only mode
             tag_adding_results: list[TagAddingResult] = []
             tag_adding_failed = 0
@@ -1813,26 +1845,6 @@ class Pipeline:
             no_key_count = 0
 
             if self.tag_adding_config.enabled:
-                path_mapping = self._download_path_mapping
-                download_succeeded_items = []
-                for item in items:
-                    item_key = item.get("key", "")
-                    attachments = item.get("attachments", [])
-                    pdf_attachments = [
-                        att for att in attachments if self._is_pdf_attachment(att)
-                    ]
-                    if not pdf_attachments:
-                        download_succeeded_items.append(item)
-                        continue
-                    all_succeeded = True
-                    for att in pdf_attachments:
-                        mapping_key = f"{item_key}:::{att.get('key', '')}"
-                        if mapping_key not in path_mapping:
-                            all_succeeded = False
-                            break
-                    if all_succeeded:
-                        download_succeeded_items.append(item)
-
                 tag_adding_eligible = len(download_succeeded_items)
                 log_tag_adding_start(
                     self.logger,
@@ -1848,16 +1860,10 @@ class Pipeline:
                 )
                 tag_adding_matched = len(tag_adding_results)
 
-            # Return early with download-only summary (item-level from path_mapping)
+            # Return early with download-only summary
             total_time = time.time() - start_time
-            path_mapping = self._download_path_mapping
-            successful_items = len(
-                {
-                    key.split(":::", 1)[0] if ":::" in key else key.rsplit("_", 1)[0]
-                    for key in path_mapping
-                }
-            )
-            failed_items = max(0, len(items) - successful_items)
+            successful_items = len(download_succeeded_items)
+            failed_items = len(items) - successful_items
             summary = {
                 "total_items": len(items),
                 "successful_items": successful_items,

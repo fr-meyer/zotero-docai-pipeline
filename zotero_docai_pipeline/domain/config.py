@@ -6,7 +6,6 @@ These schemas are registered with Hydra to enable validation and IDE autocomplet
 support for configuration values.
 """
 
-import logging
 from dataclasses import dataclass, field
 
 from hydra.core.config_store import ConfigStore
@@ -322,8 +321,10 @@ class TagAddingConfig:
     tags: list[str] = field(default_factory=list)
     """Tags to apply to matched Zotero items."""
 
-    titles: list[str] = field(default_factory=list)
-    """Item titles to match for tag adding."""
+    citation_keys: list[str] = field(default_factory=list)
+    """Citation keys to match for tag adding. Each entry must exactly match
+    (case-sensitive, whitespace-trimmed) the Citation Key found in a Zotero
+    item's extra field."""
 
     def __post_init__(self) -> None:
         """Validate tag adding configuration."""
@@ -332,9 +333,10 @@ class TagAddingConfig:
                 "tag_adding.tags cannot be empty when tag_adding is enabled. "
                 "Provide at least one tag to apply."
             )
-        if self.enabled and not self.titles:
-            logging.getLogger(__name__).warning(
-                "tag_adding.titles is empty: no items will be matched for tag adding."
+        if self.enabled and not self.citation_keys:
+            raise ConfigError(
+                "tag_adding.citation_keys cannot be empty when tag_adding is enabled. "
+                "Provide at least one citation key to match."
             )
 
 

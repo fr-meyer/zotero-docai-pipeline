@@ -81,7 +81,7 @@ class TagAddingResult:
     """Item title for logging and display."""
 
     matched: bool
-    """Whether the item title matched one of the configured titles."""
+    """Whether the item's citation key matched one of the configured citation keys."""
 
     tags_added: list[str]
     """Tags that were successfully added to the item."""

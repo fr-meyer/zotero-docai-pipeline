@@ -90,7 +90,6 @@ from zotero_docai_pipeline.utils.logging import (
     log_tag_adding_start,
     log_tagging,
 )
-from zotero_docai_pipeline.utils.text import normalize_title
 from zotero_docai_pipeline.utils.progress import ProgressBar
 from zotero_docai_pipeline.utils.retry import retry_with_backoff
 
@@ -700,11 +699,11 @@ class Pipeline:
     def _apply_tag_adding(
         self, items: list[dict[str, Any]]
     ) -> list[TagAddingResult]:
-        """Apply configured tags to items whose titles match the configured title list.
+        """Apply configured tags to items whose citation keys match the configured list.
 
-        Iterates through items, matching titles against the configured titles
-        using normalized comparison. For each match, attempts to add all
-        configured tags via the Zotero API.
+        Iterates through items, matching each item's citation key against the
+        configured citation_keys (case-sensitive, whitespace-trimmed). For each
+        match, attempts to add all configured tags via the Zotero API.
 
         Args:
             items: List of item dictionaries from _discover_items().
@@ -712,14 +711,17 @@ class Pipeline:
         Returns:
             List of TagAddingResult objects, one per matched item.
         """
-        normalized_titles = {normalize_title(t) for t in self.tag_adding_config.titles}
+        configured_keys = {
+            k.strip() for k in self.tag_adding_config.citation_keys
+        }
         results: list[TagAddingResult] = []
 
         for item in items:
             item_title = item.get("title", "")
             item_key = item.get("key", "")
+            item_citation_key = item.get("citation_key") or ""
 
-            if normalize_title(item_title) not in normalized_titles:
+            if item_citation_key.strip() not in configured_keys:
                 continue
 
             tags_added: list[str] = []
@@ -1634,7 +1636,7 @@ class Pipeline:
         if self.tag_adding_config.enabled:
             self.logger.info(
                 f"Tag Adding: ENABLED ({len(self.tag_adding_config.tags)} tags, "
-                f"{len(self.tag_adding_config.titles)} titles)"
+                f"{len(self.tag_adding_config.citation_keys)} citation keys)"
             )
         else:
             self.logger.info("Tag Adding: DISABLED")

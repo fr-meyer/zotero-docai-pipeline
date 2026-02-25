@@ -17,7 +17,6 @@ from zotero_docai_pipeline.domain.models import ProcessingResult, TagAddingResul
 from zotero_docai_pipeline.domain.tree_processor import TreeStructureProcessor
 from zotero_docai_pipeline.orchestration.pipeline import Pipeline
 from zotero_docai_pipeline.orchestration.processor import ItemProcessor
-from zotero_docai_pipeline.utils.text import normalize_title
 from zotero_docai_pipeline.utils.logging import (
     _format_with_emoji,
     _supports_unicode,
@@ -116,12 +115,12 @@ def dry_run_command(
     else:
         logger.info("No items found to process")
 
-    if cfg.tag_adding.enabled and cfg.tag_adding.titles:
-        normalized_configured = {normalize_title(t) for t in cfg.tag_adding.titles}
+    if cfg.tag_adding.enabled and cfg.tag_adding.citation_keys:
+        configured_keys = {k.strip() for k in cfg.tag_adding.citation_keys}
         matching_items = [
             item
             for item in items
-            if normalize_title(item.get("title", "")) in normalized_configured
+            if (item.get("citation_key") or "").strip() in configured_keys
         ]
 
         logger.info("")
@@ -137,11 +136,12 @@ def dry_run_command(
             )
             for item in matching_items:
                 title = item.get("title", "Untitled")[:60]
+                ckey = item.get("citation_key", "")
                 logger.info(
-                    f'  - "{title}"  \u2192  tags: {list(cfg.tag_adding.tags)}'
+                    f'  - "{title}" (key: {ckey})  \u2192  tags: {list(cfg.tag_adding.tags)}'
                 )
         else:
-            logger.info("  No items match the configured title list")
+            logger.info("  No items match the configured citation key list")
 
     return 0
 

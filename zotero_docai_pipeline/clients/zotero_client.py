@@ -92,6 +92,9 @@ class ZoteroClient:
             - title: Item title
             - tags: List of tag strings
             - attachments: List of attachment dicts with 'key' and 'filename'
+            - citation_key: str | None — Citation key parsed from the item's extra field
+              (Better BibTeX convention: "Citation Key: <key>"). None if no Citation Key
+              line is present in extra.
 
         Raises:
             ZoteroAPIError: If API communication fails.
@@ -160,12 +163,22 @@ class ZoteroClient:
                     logger.warning(f"Failed to fetch children for item {item_key}: {e}")
                     pdf_attachments = []
 
+                citation_key = None
+                extra = item_data.get("extra", "")
+                if extra:
+                    for line in extra.splitlines():
+                        stripped = line.strip()
+                        if stripped.lower().startswith("citation key:"):
+                            citation_key = stripped[len("citation key:"):].strip()
+                            break
+
                 result.append(
                     {
                         "key": item_key,
                         "title": item_title,
                         "tags": item_tags,
                         "attachments": pdf_attachments,
+                        "citation_key": citation_key,
                     }
                 )
 

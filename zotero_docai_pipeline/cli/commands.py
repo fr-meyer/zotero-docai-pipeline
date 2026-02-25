@@ -138,7 +138,7 @@ def dry_run_command(
                 title = item.get("title", "Untitled")[:60]
                 ckey = item.get("citation_key", "")
                 logger.info(
-                    f'  - "{title}" (key: {ckey})  \u2192  tags: {list(cfg.tag_adding.tags)}'
+                    f'  - "{title}" (citation key: {ckey})  \u2192  tags: {list(cfg.tag_adding.tags)}'
                 )
         else:
             logger.info("  No items match the configured citation key list")

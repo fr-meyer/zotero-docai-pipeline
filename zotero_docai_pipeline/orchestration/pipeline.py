@@ -1707,6 +1707,7 @@ class Pipeline:
                 "tag_adding_matched": 0,
                 "tag_adding_succeeded": 0,
                 "tag_adding_eligible": 0,
+                "tag_adding_no_key": 0,
             }
 
         # Early exit for standalone tag-adding mode

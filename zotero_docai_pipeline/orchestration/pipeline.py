@@ -698,7 +698,7 @@ class Pipeline:
 
     def _apply_tag_adding(
         self, items: list[dict[str, Any]]
-    ) -> list[TagAddingResult]:
+    ) -> tuple[list[TagAddingResult], int]:
         """Apply configured tags to items whose citation keys match the configured list.
 
         Iterates through items, matching each item's citation key against the
@@ -709,17 +709,27 @@ class Pipeline:
             items: List of item dictionaries from _discover_items().
 
         Returns:
-            List of TagAddingResult objects, one per matched item.
+            A 2-tuple of (results, no_key_count) where results is a list of
+            TagAddingResult objects (one per matched item) and no_key_count is
+            the number of items skipped because they had no citation key.
         """
         configured_keys = {
-            k.strip() for k in self.tag_adding_config.citation_keys
+            k.strip() for k in self.tag_adding_config.citation_keys if k.strip()
         }
         results: list[TagAddingResult] = []
+        no_key_count: int = 0
 
         for item in items:
             item_title = item.get("title", "")
             item_key = item.get("key", "")
             item_citation_key = item.get("citation_key") or ""
+
+            if not item_citation_key.strip():
+                self.logger.debug(
+                    f"Item '{item_title}' (key={item_key}) has no citation key, skipping tag adding"
+                )
+                no_key_count += 1
+                continue
 
             if item_citation_key.strip() not in configured_keys:
                 continue
@@ -752,7 +762,7 @@ class Pipeline:
             log_tag_adding_result(self.logger, result)
             results.append(result)
 
-        return results
+        return results, no_key_count
 
     def _collect_all_pdfs(
         self, items: list[dict[str, Any]]
@@ -1700,7 +1710,7 @@ class Pipeline:
             log_tag_adding_start(
                 self.logger, len(items), len(self.tag_adding_config.tags)
             )
-            tag_adding_results = self._apply_tag_adding(items)
+            tag_adding_results, no_key_count = self._apply_tag_adding(items)
             tag_adding_failed = sum(
                 1 for r in tag_adding_results if r.tags_failed
             )
@@ -1729,6 +1739,7 @@ class Pipeline:
                 "tag_adding_matched": tag_adding_matched,
                 "tag_adding_succeeded": tag_adding_succeeded,
                 "tag_adding_eligible": len(items),
+                "tag_adding_no_key": no_key_count,
             }
 
             # Log completion
@@ -1799,6 +1810,7 @@ class Pipeline:
             tag_adding_matched = 0
             tag_adding_succeeded = 0
             tag_adding_eligible = 0
+            no_key_count = 0
 
             if self.tag_adding_config.enabled:
                 path_mapping = self._download_path_mapping
@@ -1826,7 +1838,7 @@ class Pipeline:
                     tag_adding_eligible,
                     len(self.tag_adding_config.tags),
                 )
-                tag_adding_results = self._apply_tag_adding(download_succeeded_items)
+                tag_adding_results, no_key_count = self._apply_tag_adding(download_succeeded_items)
                 tag_adding_failed = sum(
                     1 for r in tag_adding_results if r.tags_failed
                 )
@@ -1865,6 +1877,7 @@ class Pipeline:
             summary["tag_adding_matched"] = tag_adding_matched
             summary["tag_adding_succeeded"] = tag_adding_succeeded
             summary["tag_adding_eligible"] = tag_adding_eligible
+            summary["tag_adding_no_key"] = no_key_count
 
             # Log completion
             log_completion(self.logger)
@@ -2093,6 +2106,7 @@ class Pipeline:
         item_map = {item.get("key", ""): item for item in items}
 
         tag_adding_results_ocr: list[TagAddingResult] = []
+        tag_adding_no_key_total: int = 0
 
         for result in results:
             item = item_map.get(result.item_key)
@@ -2120,7 +2134,8 @@ class Pipeline:
                     # addition failed
 
                 if self.tag_adding_config.enabled:
-                    item_tag_results = self._apply_tag_adding([item])
+                    item_tag_results, item_no_key = self._apply_tag_adding([item])
+                    tag_adding_no_key_total += item_no_key
                     if item_tag_results:
                         tag_adding_results_ocr.append(item_tag_results[0])
 
@@ -2222,12 +2237,14 @@ class Pipeline:
             summary["tag_adding_eligible"] = sum(
                 1 for r in results if r.success
             )
+            summary["tag_adding_no_key"] = tag_adding_no_key_total
         else:
             summary["tag_adding_results"] = []
             summary["tag_adding_failed"] = 0
             summary["tag_adding_matched"] = 0
             summary["tag_adding_succeeded"] = 0
             summary["tag_adding_eligible"] = 0
+            summary["tag_adding_no_key"] = 0
 
         # Log completion
         log_completion(self.logger)

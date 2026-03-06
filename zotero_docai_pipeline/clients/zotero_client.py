@@ -730,6 +730,141 @@ class ZoteroClient:
                 logger.error(f"{error_msg}: {e}", exc_info=True)
                 raise ZoteroAPIError(error_msg, e) from e
 
+    def set_tags(self, item_key: str, tags: list[str]) -> None:
+        """Replace all tags on a Zotero item with the given list.
+
+        Performs a strict wipe: the item's entire ``tags`` array is overwritten
+        with ``tags``.  This is destructive — all prior tags (including
+        system/pipeline/manual tags) are removed.
+
+        Uses retry-on-412 logic identical to :meth:`add_tag` (max 5 attempts,
+        exponential backoff ``0.5 * 2^(attempt-1)``).  After a 412 response
+        the current tag set is re-fetched and compared (normalized, order-
+        independent) against ``tags``; if they match the call is treated as
+        successful.
+
+        Args:
+            item_key: Zotero item key whose tags will be replaced.
+            tags: Full list of tag strings to set on the item.
+
+        Raises:
+            ZoteroAPIError: If API call fails after all retries.
+            ZoteroAuthError: If authentication fails.
+            ZoteroItemNotFoundError: If the item doesn't exist (404).
+        """
+        max_retries = 5
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.debug(
+                    f"Setting tags on item_key={item_key} "
+                    f"(attempt {attempt}, tags={tags})"
+                )
+
+                item = self._zotero.item(item_key)
+
+                if not isinstance(item, dict):
+                    raise ZoteroAPIError(
+                        f"Invalid item structure for item_key={item_key}"
+                    )
+                item_data_raw = item.get("data", {})
+                if not isinstance(item_data_raw, dict):
+                    raise ZoteroAPIError(
+                        f"Invalid item data structure for item_key={item_key}"
+                    )
+                item_data = cast(dict[str, Any], item_data_raw)
+
+                item_data["tags"] = [{"tag": t} for t in tags]
+
+                self._zotero.update_item(item)
+                logger.info(
+                    f"Successfully set tags {tags} on item_key={item_key}"
+                )
+                return
+
+            except zotero_errors.PreConditionFailedError as e:
+                try:
+                    time.sleep(0.1)
+                    verify_item = self._zotero.item(item_key)
+                    if not isinstance(verify_item, dict):
+                        raise ZoteroAPIError(
+                            f"Invalid item structure for item_key={item_key}"
+                        )
+                    verify_item_data_raw = verify_item.get("data", {})
+                    if not isinstance(verify_item_data_raw, dict):
+                        raise ZoteroAPIError(
+                            f"Invalid item data structure for item_key={item_key}"
+                        )
+                    verify_item_data = cast(dict[str, Any], verify_item_data_raw)
+                    verify_tags = {
+                        t.get("tag", "").strip()
+                        for t in verify_item_data.get("tags", [])
+                        if isinstance(t, dict)
+                    }
+                    intended_tags = {t.strip() for t in tags}
+
+                    if verify_tags == intended_tags:
+                        logger.info(
+                            f"Tags on item_key={item_key} match intended set "
+                            f"despite version conflict (attempt {attempt})"
+                        )
+                        return
+                except Exception as verify_error:
+                    logger.debug(
+                        f"Failed to verify tags after 412 error: {verify_error}"
+                    )
+
+                if attempt == max_retries:
+                    error_msg = (
+                        f"Failed to set tags on item_key={item_key} "
+                        f"after {max_retries} retry attempts"
+                    )
+                    logger.error(f"{error_msg}: {e}")
+                    raise ZoteroAPIError(error_msg, e) from e
+
+                delay = 0.5 * (2 ** (attempt - 1))
+                logger.debug(
+                    f"Version conflict on attempt {attempt}, "
+                    f"waiting {delay}s before retry"
+                )
+                time.sleep(delay)
+                continue
+
+            except HTTPError as e:
+                if e.code == 404:
+                    error_msg = (
+                        f"Item not found while setting tags: "
+                        f"item_key={item_key}"
+                    )
+                    logger.error(f"{error_msg}: {e}")
+                    raise ZoteroItemNotFoundError(error_msg, e) from e
+                elif e.code in (401, 403):
+                    error_msg = (
+                        f"Authentication failed while setting tags on "
+                        f"item_key={item_key}"
+                    )
+                    logger.error(f"{error_msg}: {e}")
+                    raise ZoteroAuthError(error_msg, e) from e
+                else:
+                    error_msg = (
+                        f"API error while setting tags on "
+                        f"item_key={item_key}: HTTP {e.code}"
+                    )
+                    logger.error(f"{error_msg}: {e}")
+                    raise ZoteroAPIError(error_msg, e) from e
+            except URLError as e:
+                error_msg = (
+                    f"Network error while setting tags on item_key={item_key}"
+                )
+                logger.error(f"{error_msg}: {e}")
+                raise ZoteroAPIError(error_msg, e) from e
+            except Exception as e:
+                error_msg = (
+                    f"Unexpected error while setting tags on "
+                    f"item_key={item_key}"
+                )
+                logger.error(f"{error_msg}: {e}", exc_info=True)
+                raise ZoteroAPIError(error_msg, e) from e
+
     def remove_tag(self, item_key: str, tag: str) -> None:
         """Remove a tag from a Zotero item.
 

@@ -4,3 +4,4 @@
 enabled: false
 tags: []
 citation_keys: []
+replace_all_existing_tags: false  # If true, ALL existing tags on matched items will be deleted and replaced with tag_adding.tags. DESTRUCTIVE and opt-in.

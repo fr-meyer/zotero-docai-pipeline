@@ -329,8 +329,27 @@ class TagAddingConfig:
     2. Legacy Better BibTeX fallback: a ``Citation Key: <key>`` line in ``item["data"]["extra"]``.
     """
 
+    replace_all_existing_tags: bool = False
+    """Destructive, opt-in flag. When ``True``, ALL existing tags on matched
+    items are deleted and replaced with ``tag_adding.tags`` in a single API
+    call. Has no effect when ``enabled`` is ``False``."""
+
     def __post_init__(self) -> None:
-        """Validate tag adding configuration."""
+        """Normalize tags and validate tag adding configuration."""
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for i, t in enumerate(self.tags):
+            if not isinstance(t, str):
+                raise ConfigError(
+                    f"tag_adding.tags must contain strings only, but entry "
+                    f"at index {i} has type {type(t).__name__!r} (value: {t!r})"
+                )
+            stripped = t.strip()
+            if stripped and stripped not in seen:
+                seen.add(stripped)
+                normalized.append(stripped)
+        self.tags = normalized
+
         if self.enabled and not self.tags:
             raise ConfigError(
                 "tag_adding.tags cannot be empty when tag_adding is enabled. "

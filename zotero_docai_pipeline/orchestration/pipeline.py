@@ -177,6 +177,7 @@ class Pipeline:
         self.logger = logging.getLogger(__name__)
         self._tree_structures: dict[str, DocumentTree] = {}
         self._download_path_mapping: dict[str, str] = {}
+        self._replace_mode_logged: bool = False
 
         # Use injected TreeStructureProcessor instance (if any)
         self.tree_processor: TreeStructureProcessor | None = tree_processor
@@ -731,8 +732,16 @@ class Pipeline:
         configured_keys = {
             k.strip() for k in self.tag_adding_config.citation_keys if k.strip()
         }
+        effective_tags = list(self.tag_adding_config.tags)
         results: list[TagAddingResult] = []
         no_key_count: int = 0
+
+        if self.tag_adding_config.replace_all_existing_tags and not self._replace_mode_logged:
+            self.logger.info(
+                "Tag Adding is running in REPLACE mode: all existing tags on "
+                "matched items will be removed before applying tag_adding.tags."
+            )
+            self._replace_mode_logged = True
 
         for item in items:
             item_title = item.get("title", "")
@@ -752,20 +761,38 @@ class Pipeline:
             tags_added: list[str] = []
             tags_failed: list[str] = []
 
-            for tag in self.tag_adding_config.tags:
+            if self.tag_adding_config.replace_all_existing_tags:
                 try:
-                    self.zotero_client.add_tag(item_key, tag)
-                    tags_added.append(tag)
+                    self.zotero_client.set_tags(item_key, effective_tags)
+                    tags_added = list(effective_tags)
+                    tags_failed = []
                 except ZoteroClientError as e:
                     self.logger.warning(
-                        f"ZoteroClientError adding tag '{tag}' to {item_key}: {e}"
+                        f"ZoteroClientError replacing tags on {item_key}: {e}"
                     )
-                    tags_failed.append(tag)
+                    tags_added = []
+                    tags_failed = list(effective_tags)
                 except Exception as e:
                     self.logger.warning(
-                        f"Unexpected error adding tag '{tag}' to {item_key}: {e}"
+                        f"Unexpected error replacing tags on {item_key}: {e}"
                     )
-                    tags_failed.append(tag)
+                    tags_added = []
+                    tags_failed = list(effective_tags)
+            else:
+                for tag in effective_tags:
+                    try:
+                        self.zotero_client.add_tag(item_key, tag)
+                        tags_added.append(tag)
+                    except ZoteroClientError as e:
+                        self.logger.warning(
+                            f"ZoteroClientError adding tag '{tag}' to {item_key}: {e}"
+                        )
+                        tags_failed.append(tag)
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Unexpected error adding tag '{tag}' to {item_key}: {e}"
+                        )
+                        tags_failed.append(tag)
 
             result = TagAddingResult(
                 item_key=item_key,
@@ -1637,6 +1664,8 @@ class Pipeline:
         # Step 0: Log startup
         log_startup(self.logger, "Starting Zotero DocAI Pipeline")
 
+        self._replace_mode_logged = False
+
         # Log file cleanup configuration status
         if self.processing_config.cleanup_uploaded_files:
             self.logger.info("File cleanup: ENABLED")
@@ -2167,6 +2196,7 @@ class Pipeline:
 
         tag_adding_results_ocr: list[TagAddingResult] = []
         tag_adding_no_key_total: int = 0
+        tag_adding_processed: int = 0
 
         for result in results:
             item = item_map.get(result.item_key)
@@ -2180,24 +2210,48 @@ class Pipeline:
                 if result.notes_created > 0:
                     time.sleep(0.5)
 
-                # Add output tag
-                try:
-                    self.zotero_client.add_tag(
-                        item["key"], self.zotero_config.tags.output
-                    )
-                    log_tagging(self.logger, self.zotero_config.tags.output)
-                except ZoteroClientError as e:
-                    self.logger.warning(
-                        f"Failed to add output tag to item {item['key']}: {e}"
-                    )
-                    # Don't mark item as failed - processing succeeded, tag
-                    # addition failed
-
                 if self.tag_adding_config.enabled:
+                    # Step A: apply tag adding first
                     item_tag_results, item_no_key = self._apply_tag_adding([item])
                     tag_adding_no_key_total += item_no_key
                     if item_tag_results:
                         tag_adding_results_ocr.append(item_tag_results[0])
+
+                    # Step B: apply output tag only if item matched and all tags succeeded
+                    item_matched = bool(item_tag_results)
+                    item_succeeded = item_matched and not item_tag_results[0].tags_failed
+                    if item_succeeded:
+                        try:
+                            self.zotero_client.add_tag(
+                                item["key"], self.zotero_config.tags.output
+                            )
+                            log_tagging(self.logger, self.zotero_config.tags.output)
+                            tag_adding_processed += 1
+                        except ZoteroClientError as e:
+                            self.logger.warning(
+                                f"Failed to add output tag to item {item['key']}: {e}"
+                            )
+                            item_tag_results[0].tags_failed.append(
+                                self.zotero_config.tags.output
+                            )
+                        except Exception as e:
+                            self.logger.warning(
+                                f"Unexpected error adding output tag to item {item['key']}: {e}"
+                            )
+                            item_tag_results[0].tags_failed.append(
+                                self.zotero_config.tags.output
+                            )
+                else:
+                    # Tag adding disabled — unconditional output tag (existing behavior)
+                    try:
+                        self.zotero_client.add_tag(
+                            item["key"], self.zotero_config.tags.output
+                        )
+                        log_tagging(self.logger, self.zotero_config.tags.output)
+                    except ZoteroClientError as e:
+                        self.logger.warning(
+                            f"Failed to add output tag to item {item['key']}: {e}"
+                        )
 
             # Handle failed results
             else:
@@ -2298,6 +2352,7 @@ class Pipeline:
                 1 for r in results if r.success
             )
             summary["tag_adding_no_key"] = tag_adding_no_key_total
+            summary["tag_adding_processed"] = tag_adding_processed
         else:
             summary["tag_adding_results"] = []
             summary["tag_adding_failed"] = 0
@@ -2305,6 +2360,7 @@ class Pipeline:
             summary["tag_adding_succeeded"] = 0
             summary["tag_adding_eligible"] = 0
             summary["tag_adding_no_key"] = 0
+            summary["tag_adding_processed"] = 0
 
         # Log completion
         log_completion(self.logger)

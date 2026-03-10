@@ -115,8 +115,9 @@ def dry_run_command(
     else:
         logger.info("No items found to process")
 
-    if cfg.tag_adding.enabled and cfg.tag_adding.citation_keys:
-        configured_keys = {k.strip() for k in cfg.tag_adding.citation_keys if k.strip()}
+    if cfg.tag_adding.enabled and cfg.tag_adding.assignments:
+        assignments = cfg.tag_adding.assignments
+        configured_keys = set(assignments.keys())
 
         matching_items = [
             item
@@ -135,26 +136,20 @@ def dry_run_command(
                 logger.info(
                     "\u26a0\ufe0f  Replace mode: all existing tags on these items will be removed."
                 )
-                logger.info(
-                    f"  {len(matching_items)} item(s) would have ALL existing tags replaced with: "
-                    f"{list(cfg.tag_adding.tags)}"
-                )
                 for item in matching_items:
                     title = item.get("title", "Untitled")[:60]
-                    ckey = item.get("citation_key", "")
+                    ckey = (item.get("citation_key") or "").strip()
+                    assigned_tags = assignments.get(ckey, [])
                     logger.info(
-                        f'  - "{title}" (citation key: {ckey})  \u2192  tags REPLACED by: {list(cfg.tag_adding.tags)}'
+                        f'  - "{title}" (citation key: {ckey})  \u2192  tags REPLACED by: {assigned_tags}'
                     )
             else:
-                logger.info(
-                    f"  {len(matching_items)} item(s) would be tagged with: "
-                    f"{list(cfg.tag_adding.tags)}"
-                )
                 for item in matching_items:
                     title = item.get("title", "Untitled")[:60]
-                    ckey = item.get("citation_key", "")
+                    ckey = (item.get("citation_key") or "").strip()
+                    assigned_tags = assignments.get(ckey, [])
                     logger.info(
-                        f'  - "{title}" (citation key: {ckey})  \u2192  tags: {list(cfg.tag_adding.tags)}'
+                        f'  - "{title}" (citation key: {ckey})  \u2192  tags: {assigned_tags}'
                     )
         else:
             logger.info("  No items match the configured citation key list")

@@ -715,11 +715,11 @@ class Pipeline:
     def _apply_tag_adding(
         self, items: list[dict[str, Any]]
     ) -> tuple[list[TagAddingResult], int]:
-        """Apply configured tags to items whose citation keys match the configured list.
+        """Apply per-item tags from assignments to items whose citation keys match.
 
         Iterates through items, matching each item's citation key against the
-        configured citation_keys (case-sensitive, whitespace-trimmed). For each
-        match, attempts to add all configured tags via the Zotero API.
+        keys in ``assignments`` (case-sensitive, whitespace-trimmed). For each
+        match, attempts to add that item's assigned tags via the Zotero API.
 
         Args:
             items: List of item dictionaries from _discover_items().
@@ -729,17 +729,14 @@ class Pipeline:
             TagAddingResult objects (one per matched item) and no_key_count is
             the number of items skipped because they had no citation key.
         """
-        configured_keys = {
-            k.strip() for k in self.tag_adding_config.citation_keys if k.strip()
-        }
-        effective_tags = list(self.tag_adding_config.tags)
+        assignments = self.tag_adding_config.assignments
         results: list[TagAddingResult] = []
         no_key_count: int = 0
 
         if self.tag_adding_config.replace_all_existing_tags and not self._replace_mode_logged:
             self.logger.info(
                 "Tag Adding is running in REPLACE mode: all existing tags on "
-                "matched items will be removed before applying tag_adding.tags."
+                "matched items will be removed before applying assigned tags."
             )
             self._replace_mode_logged = True
 
@@ -755,9 +752,11 @@ class Pipeline:
                 no_key_count += 1
                 continue
 
-            if item_citation_key.strip() not in configured_keys:
+            normalized_key = item_citation_key.strip()
+            if normalized_key not in assignments:
                 continue
 
+            effective_tags = list(assignments[normalized_key])
             tags_added: list[str] = []
             tags_failed: list[str] = []
 
@@ -1688,9 +1687,13 @@ class Pipeline:
 
         # Log tag adding status
         if self.tag_adding_config.enabled:
+            num_keys = len(self.tag_adding_config.assignments)
+            total_tags = sum(
+                len(tags) for tags in self.tag_adding_config.assignments.values()
+            )
             self.logger.info(
-                f"Tag Adding: ENABLED ({len(self.tag_adding_config.tags)} tags, "
-                f"{len(self.tag_adding_config.citation_keys)} citation keys)"
+                f"Tag Adding: ENABLED ({num_keys} citation keys, "
+                f"{total_tags} total tag assignments)"
             )
         else:
             self.logger.info("Tag Adding: DISABLED")
@@ -1754,7 +1757,7 @@ class Pipeline:
                 "Standalone tag-adding mode: OCR and download disabled"
             )
             log_tag_adding_start(
-                self.logger, len(items), len(self.tag_adding_config.tags)
+                self.logger, len(items), len(self.tag_adding_config.assignments)
             )
             tag_adding_results, no_key_count = self._apply_tag_adding(items)
 
@@ -1909,7 +1912,7 @@ class Pipeline:
                 log_tag_adding_start(
                     self.logger,
                     tag_adding_eligible,
-                    len(self.tag_adding_config.tags),
+                    len(self.tag_adding_config.assignments),
                 )
                 tag_adding_results, no_key_count = self._apply_tag_adding(download_succeeded_items)
 

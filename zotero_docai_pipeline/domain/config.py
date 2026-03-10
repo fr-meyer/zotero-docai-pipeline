@@ -318,48 +318,81 @@ class TagAddingConfig:
     enabled: bool = False
     """Whether the Tag Adding feature is enabled."""
 
-    tags: list[str] = field(default_factory=list)
-    """Tags to apply to matched Zotero items."""
-
-    citation_keys: list[str] = field(default_factory=list)
-    """Citation keys to match for tag adding. Each entry must exactly match
-    (case-sensitive, whitespace-trimmed) the citation key resolved from a
-    Zotero item using the following precedence:
+    assignments: dict[str, list[str]] = field(default_factory=dict)
+    """Per-item tag assignments. Maps each citation key to its own list of tags
+    to apply. Citation key matching is exact and case-sensitive
+    (whitespace-trimmed). Keys are resolved from Zotero items using the
+    following precedence:
     1. Native Zotero 8+ field: ``item["data"]["citationKey"]`` (preferred when present and non-empty).
     2. Legacy Better BibTeX fallback: a ``Citation Key: <key>`` line in ``item["data"]["extra"]``.
     """
 
     replace_all_existing_tags: bool = False
     """Destructive, opt-in flag. When ``True``, ALL existing tags on matched
-    items are deleted and replaced with ``tag_adding.tags`` in a single API
+    items are deleted and replaced with their assigned tags in a single API
     call. Has no effect when ``enabled`` is ``False``."""
 
     def __post_init__(self) -> None:
-        """Normalize tags and validate tag adding configuration."""
-        seen: set[str] = set()
-        normalized: list[str] = []
-        for i, t in enumerate(self.tags):
-            if not isinstance(t, str):
-                raise ConfigError(
-                    f"tag_adding.tags must contain strings only, but entry "
-                    f"at index {i} has type {type(t).__name__!r} (value: {t!r})"
-                )
-            stripped = t.strip()
-            if stripped and stripped not in seen:
-                seen.add(stripped)
-                normalized.append(stripped)
-        self.tags = normalized
+        """Normalize and validate tag-adding assignments."""
+        # 1. Empty-assignments guard
+        if self.enabled and not self.assignments:
+            raise ConfigError(
+                "tag_adding.assignments cannot be empty when tag_adding is "
+                "enabled. Provide at least one citation_key → tags mapping."
+            )
 
-        if self.enabled and not self.tags:
-            raise ConfigError(
-                "tag_adding.tags cannot be empty when tag_adding is enabled. "
-                "Provide at least one tag to apply."
-            )
-        if self.enabled and not self.citation_keys:
-            raise ConfigError(
-                "tag_adding.citation_keys cannot be empty when tag_adding is enabled. "
-                "Provide at least one citation key to match."
-            )
+        # 2. Key collision check
+        seen_keys: dict[str, str] = {}
+        for raw_key in self.assignments:
+            normalized_key = raw_key.strip()
+            if normalized_key in seen_keys:
+                raise ConfigError(
+                    f"tag_adding.assignments has duplicate citation keys after "
+                    f"stripping whitespace: {seen_keys[normalized_key]!r} and "
+                    f"{raw_key!r} both normalize to {normalized_key!r}. "
+                    f"Use unique keys."
+                )
+            seen_keys[normalized_key] = raw_key
+
+        # 3. Value type check
+        for citation_key, value in self.assignments.items():
+            if not isinstance(value, list):
+                raise ConfigError(
+                    f"tag_adding.assignments[{citation_key!r}] must be a list "
+                    f"of strings, got {type(value).__name__!r}"
+                )
+
+        # 4. Element type check
+        for citation_key, value in self.assignments.items():
+            for i, t in enumerate(value):
+                if not isinstance(t, str):
+                    raise ConfigError(
+                        f"tag_adding.assignments[{citation_key!r}] must "
+                        f"contain strings only, but entry at index {i} has "
+                        f"type {type(t).__name__!r} (value: {t!r})"
+                    )
+
+        # 5. Per-item normalization + rebuild
+        rebuilt: dict[str, list[str]] = {}
+        for citation_key, value in self.assignments.items():
+            seen: set[str] = set()
+            normalized: list[str] = []
+            for t in value:
+                stripped = t.strip()
+                if stripped and stripped not in seen:
+                    seen.add(stripped)
+                    normalized.append(stripped)
+            rebuilt[citation_key.strip()] = normalized
+        self.assignments = rebuilt
+
+        # 6. Empty-tag-list guard
+        for citation_key, tags in self.assignments.items():
+            if not tags:
+                raise ConfigError(
+                    f"tag_adding.assignments[{citation_key!r}] has no valid "
+                    f"tags after normalization (all entries were empty or "
+                    f"whitespace-only). Provide at least one non-empty tag."
+                )
 
 
 @dataclass

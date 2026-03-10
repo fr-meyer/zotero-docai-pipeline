@@ -341,10 +341,17 @@ class TagAddingConfig:
                 "enabled. Provide at least one citation_key → tags mapping."
             )
 
-        # 2. Key collision check
+        # 2. Key collision check (includes empty-key guard)
         seen_keys: dict[str, str] = {}
         for raw_key in self.assignments:
             normalized_key = raw_key.strip()
+            if not normalized_key:
+                raise ConfigError(
+                    f"tag_adding.assignments contains an invalid key "
+                    f"{raw_key!r} that is empty or whitespace-only after "
+                    f"normalization. All citation keys must be non-empty "
+                    f"strings."
+                )
             if normalized_key in seen_keys:
                 raise ConfigError(
                     f"tag_adding.assignments has duplicate citation keys after "

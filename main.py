@@ -1,5 +1,6 @@
 """Main entry point for Zotero Document AI Pipeline."""
 
+import json
 import logging
 import os
 import sys
@@ -315,7 +316,34 @@ def main(cfg: DictConfig) -> int:
         # Construct RetryConfig from DictConfig before passing to DownloadConfig
         retry_config = RetryConfig(**cfg.download.retry)
         download_kw = {k: v for k, v in cfg.download.items() if k != "retry"}
-        tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+
+        # Override tag_adding assignments from environment JSON when provided.
+        # This avoids Hydra override grammar limits for large dicts and ensures
+        # TagAddingConfig is constructed with non-empty assignments.
+        env_assignments = os.getenv("TAG_ADDING_ASSIGNMENTS_JSON")
+        if env_assignments:
+            parsed_assignments = json.loads(env_assignments)
+            if isinstance(parsed_assignments, dict):
+                extra_fields = {
+                    k: v
+                    for k, v in cfg.tag_adding.items()
+                    if k not in ("enabled", "assignments")
+                }
+                tag_adding_config = TagAddingConfig(
+                    enabled=True,
+                    assignments=parsed_assignments,
+                    **extra_fields,
+                )
+            else:
+                logger.error(
+                    "TAG_ADDING_ASSIGNMENTS_JSON must decode to a dict, "
+                    "got %s; falling back to config tag_adding.",
+                    type(parsed_assignments).__name__,
+                )
+                tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+        else:
+            tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+
         app_cfg = AppConfig(
             zotero=ZoteroConfig(**cfg.zotero),
             ocr=ocr_config,

@@ -143,6 +143,9 @@ def dry_run_command(
                     logger.info(
                         f'  - "{title}" (citation key: {ckey})  \u2192  tags REPLACED by: {assigned_tags}'
                     )
+                logger.info(
+                    f"  {len(matching_items)} item(s) would have ALL existing tags replaced with their assigned tags"
+                )
             else:
                 for item in matching_items:
                     title = item.get("title", "Untitled")[:60]
@@ -151,8 +154,23 @@ def dry_run_command(
                     logger.info(
                         f'  - "{title}" (citation key: {ckey})  \u2192  tags: {assigned_tags}'
                     )
+                logger.info(
+                    f"  {len(matching_items)} item(s) would be tagged with their assigned tags"
+                )
         else:
             logger.info("  No items match the configured citation key list")
+
+        discovered_keys = {
+            (item.get("citation_key") or "").strip()
+            for item in items
+            if (item.get("citation_key") or "").strip()
+        }
+        unmatched_keys = [k for k in assignments if k not in discovered_keys]
+        logger.info(f"  Unmatched assignment keys: {len(unmatched_keys)}")
+        if unmatched_keys:
+            logger.info(
+                f"  First {min(5, len(unmatched_keys))} example(s): {unmatched_keys[:5]}"
+            )
 
     return 0
 

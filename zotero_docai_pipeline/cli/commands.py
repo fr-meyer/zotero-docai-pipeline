@@ -419,6 +419,7 @@ def process_command(
         cfg.ocr,
         cfg.download,
         cfg.tag_adding,
+        cfg.tagging,
         tree_processor=tree_processor,
     )
     summary = pipeline.run()

@@ -19,21 +19,20 @@ Example usage:
     >>> from zotero_docai_pipeline.orchestration.processor import ItemProcessor
     >>>
     >>> processor = ItemProcessor(zotero_client, ocr_client, processing_config)
-    >>> item = {
-    ...     'key': 'ITEM_KEY_123',
-    ...     'title': 'My Document',
-    ...     'tags': ['docai'],
-    ...     'attachments': [
-    ...         {'key': 'ATTACH_KEY_1', 'filename': 'document.pdf'}
-    ...     ]
-    ... }
-    >>> result = processor.process_item(item)
+    >>> item = DiscoveredItem(
+    ...     key='ITEM_KEY_123',
+    ...     title='My Document',
+    ...     tags=['docai'],
+    ...     attachments=[AttachmentInfo(key='ATTACH_KEY_1', filename='document.pdf')],
+    ...     citation_key=None,
+    ...     paper_metadata=PaperMetadata(),
+    ... )
+    >>> result = processor.process_item(item, ocr_results={})
     >>> print(f"Success: {result.success}, Notes: {result.notes_created}")
 """
 
 import logging
 import time
-from typing import Any
 
 from zotero_docai_pipeline.clients.exceptions import (
     ZoteroClientError,
@@ -42,6 +41,7 @@ from zotero_docai_pipeline.clients.ocr_client import OCRClient
 from zotero_docai_pipeline.clients.zotero_client import ZoteroClient
 from zotero_docai_pipeline.domain.config import ProcessingConfig
 from zotero_docai_pipeline.domain.models import (
+    DiscoveredItem,
     DocumentTree,
     NotePayload,
     PageContent,
@@ -124,7 +124,7 @@ class ItemProcessor:
 
     def process_item(
         self,
-        item: dict[str, Any],
+        item: DiscoveredItem,
         ocr_results: dict[str, list[PageContent]],
         pre_extracted_trees: dict[str, DocumentTree] | None = None,
     ) -> ProcessingResult:
@@ -141,13 +141,8 @@ class ItemProcessor:
         PDFs process successfully.
 
         Args:
-            item: Dictionary containing item metadata with structure:
-                - key: str - Zotero item key identifier
-                - title: str - Item title for logging
-                - tags: List[str] - List of tags (not used by processor)
-                - attachments: List[Dict] - List of attachment dicts with:
-                    - key: str - Attachment key
-                    - filename: str - PDF filename
+            item: DiscoveredItem containing typed item metadata including key,
+                title, tags, and attachments (list of AttachmentInfo).
             ocr_results: Required dictionary mapping attachment_key →
                 List[PageContent]. Contains pre-fetched OCR results for all
                 attachments. Keys must match attachment keys from the item's
@@ -173,8 +168,8 @@ class ItemProcessor:
             ProcessingResult.errors list.
         """
         start_time = time.time()
-        item_key = item.get("key", "unknown")
-        item_title = item.get("title", "Untitled")
+        item_key = item.key
+        item_title = item.title
 
         # Initialize tracking variables
         total_pages = 0
@@ -185,7 +180,7 @@ class ItemProcessor:
         pdf_trees: dict[str, DocumentTree] = {}
 
         # Validate item has PDF attachments
-        attachments = item.get("attachments", [])
+        attachments = item.attachments
         if not attachments:
             processing_time = time.time() - start_time
             return ProcessingResult(
@@ -204,8 +199,8 @@ class ItemProcessor:
         # Process each PDF attachment using pre-fetched results
         total_pdfs = len(attachments)
         for pdf_index, attachment in enumerate(attachments, start=1):
-            attachment_key = attachment.get("key")
-            filename = attachment.get("filename")
+            attachment_key = attachment.key
+            filename = attachment.filename
 
             # Validate attachment has required fields
             if not attachment_key or not filename:

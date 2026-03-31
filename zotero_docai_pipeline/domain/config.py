@@ -135,31 +135,11 @@ def _strip_dedup(values: list[str]) -> list[str]:
 
 
 @dataclass
-class ZoteroTagsConfig:
-    """Configuration for Zotero tag-based workflow.
-
-    Tags are used to mark items for processing and track processing status.
-    """
-
-    input: str = "docai"
-    """Tag that marks items for processing. Items with this tag will be
-    processed by the pipeline."""
-
-    output: str = "docai-processed"
-    """Tag added to successfully processed items. Prevents reprocessing of
-    already processed items."""
-
-    error: str = "docai-error"
-    """Tag added to items that fail processing. Use this tag to easily
-    identify and review failed items."""
-
-
-@dataclass
 class ZoteroConfig:
     """Configuration for Zotero API integration.
 
     Contains settings for connecting to and interacting with the Zotero API,
-    including library identification, authentication, and tag-based workflow.
+    including library identification, authentication, and error tagging.
     """
 
     library_id: str
@@ -168,10 +148,6 @@ class ZoteroConfig:
 
     api_key: str
     """Zotero API key. Obtain from https://www.zotero.org/settings/keys"""
-
-    tags: ZoteroTagsConfig = field(default_factory=ZoteroTagsConfig)
-    """Tag-based workflow configuration. Defines tags for input, output, and
-    error states."""
 
     error_tagging_enabled: bool = True
     """Whether to add error tags to failed items. Makes it easy to identify
@@ -379,10 +355,6 @@ class DownloadConfig:
     """Whether PDF download feature is enabled. Default False for backward
     compatibility."""
 
-    tag: str = "docai"
-    """Zotero tag to filter items for download. Only items with this tag
-    will be processed."""
-
     upload_folder: str = "./downloads"
     """Local directory path where downloaded PDFs will be saved."""
 
@@ -406,11 +378,6 @@ class DownloadConfig:
 
     def __post_init__(self) -> None:
         """Validate download configuration parameters."""
-        if not self.tag or not self.tag.strip():
-            raise ConfigError(
-                "tag is required and cannot be empty or whitespace-only. "
-                "Specify a Zotero tag to filter items for download."
-            )
         if not self.upload_folder or not self.upload_folder.strip():
             raise ConfigError(
                 "upload_folder is required and cannot be empty or whitespace-only. "

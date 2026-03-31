@@ -1959,6 +1959,7 @@ class Pipeline:
                     1 for r in tag_adding_results if not r.tags_failed
                 )
                 tag_adding_matched = len(tag_adding_results)
+                tag_adding_processed = len(download_succeeded_items)
 
             # Return early with download-only summary
             total_time = time.time() - start_time

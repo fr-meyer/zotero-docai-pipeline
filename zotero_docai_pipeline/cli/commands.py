@@ -6,13 +6,14 @@ after configuration validation and client initialization.
 """
 
 import logging
+from typing import Any
 
 from tabulate import tabulate
 
 from zotero_docai_pipeline.clients.ocr_client import OCRClient
 from zotero_docai_pipeline.clients.zotero_client import ZoteroClient
 from zotero_docai_pipeline.domain.config import AppConfig
-from zotero_docai_pipeline.domain.models import ProcessingResult
+from zotero_docai_pipeline.domain.models import ProcessingResult, TagAddingResult
 from zotero_docai_pipeline.domain.tree_processor import TreeStructureProcessor
 from zotero_docai_pipeline.orchestration.pipeline import Pipeline
 from zotero_docai_pipeline.orchestration.processor import ItemProcessor
@@ -114,11 +115,68 @@ def dry_run_command(
     else:
         logger.info("No items found to process")
 
+    if cfg.tag_adding.enabled and cfg.tag_adding.assignments:
+        assignments = cfg.tag_adding.assignments
+        configured_keys = set(assignments.keys())
+
+        matching_items = [
+            item
+            for item in items
+            if (item.get("citation_key") or "").strip() in configured_keys
+        ]
+
+        logger.info("")
+        formatted_header = _format_with_emoji(
+            "Tag Adding Preview:", "\U0001f3f7\ufe0f", "[TAG ADDING]"
+        )
+        logger.info(formatted_header)
+
+        if matching_items:
+            if cfg.tag_adding.replace_all_existing_tags:
+                logger.info(
+                    "\u26a0\ufe0f  Replace mode: all existing tags on these items will be removed."
+                )
+                for item in matching_items:
+                    title = item.get("title", "Untitled")[:60]
+                    ckey = (item.get("citation_key") or "").strip()
+                    assigned_tags = assignments.get(ckey, [])
+                    logger.info(
+                        f'  - "{title}" (citation key: {ckey})  \u2192  tags REPLACED by: {assigned_tags}'
+                    )
+                logger.info(
+                    f"  {len(matching_items)} item(s) would have ALL existing tags replaced with their assigned tags"
+                )
+            else:
+                for item in matching_items:
+                    title = item.get("title", "Untitled")[:60]
+                    ckey = (item.get("citation_key") or "").strip()
+                    assigned_tags = assignments.get(ckey, [])
+                    logger.info(
+                        f'  - "{title}" (citation key: {ckey})  \u2192  tags: {assigned_tags}'
+                    )
+                logger.info(
+                    f"  {len(matching_items)} item(s) would be tagged with their assigned tags"
+                )
+        else:
+            logger.info("  No items match the configured citation key list")
+
+        discovered_keys = {
+            (item.get("citation_key") or "").strip()
+            for item in items
+            if (item.get("citation_key") or "").strip()
+        }
+        unmatched_keys = [k for k in assignments if k not in discovered_keys]
+        logger.info(f"  Unmatched assignment keys: {len(unmatched_keys)}")
+        if unmatched_keys:
+            logger.info(
+                f"  First {min(5, len(unmatched_keys))} example(s): {unmatched_keys[:5]}"
+            )
+
     return 0
 
 
 def _determine_exit_code(
-    summary: dict[str, int | float | list[ProcessingResult]],
+    summary: dict[str, Any],
 ) -> int:
     """Determine the appropriate exit code based on processing summary.
 
@@ -149,6 +207,16 @@ def _determine_exit_code(
 
     # Check PDF download failures - must return non-zero exit code
     if total_pdfs_failed > 0:
+        if successful_items == 0:
+            return 2  # Complete failure (no items succeeded)
+        else:
+            return 1  # Partial failure (some items succeeded)
+
+    # Check tag-adding failures
+    tag_adding_failed = summary.get("tag_adding_failed", 0)
+    if not isinstance(tag_adding_failed, int):
+        tag_adding_failed = 0
+    if tag_adding_failed > 0:
         if successful_items == 0:
             return 2  # Complete failure (no items succeeded)
         else:
@@ -269,6 +337,51 @@ def _display_combined_summary(logger: logging.Logger, summary: dict) -> None:
     log_error_summary(logger, summary.get("results", []))
 
 
+def _display_tag_adding_summary(
+    logger: logging.Logger, tag_adding_results: list[TagAddingResult]
+) -> None:
+    """Display summary for tag-adding operations.
+
+    Displays a formatted table with per-item tag-adding outcomes including
+    which tags were added and which failed for each matched item.
+
+    Args:
+        logger: Logger instance for logging messages
+        tag_adding_results: List of TagAddingResult objects from tag-adding
+    """
+    logger.info("")
+    formatted_header = _format_with_emoji(
+        "Tag Adding Summary:", "\U0001f3f7\ufe0f", "[TAG ADDING]"
+    )
+    logger.info(formatted_header)
+
+    if not tag_adding_results:
+        logger.info("No items matched the configured citation key list")
+        return
+
+    table_data = [
+        [
+            result.item_title[:40],
+            ", ".join(result.tags_added),
+            ", ".join(result.tags_failed),
+        ]
+        for result in tag_adding_results
+    ]
+
+    tablefmt = "grid" if _supports_unicode() else "simple"
+    table_str = tabulate(
+        table_data,
+        headers=["Item Title", "Tags Applied", "Tags Failed"],
+        tablefmt=tablefmt,
+    )
+    logger.info(table_str)
+
+    matched = len(tag_adding_results)
+    succeeded = sum(1 for r in tag_adding_results if not r.tags_failed)
+    failed = sum(1 for r in tag_adding_results if r.tags_failed)
+    logger.info(f"Matched: {matched} | Succeeded: {succeeded} | Failed: {failed}")
+
+
 def process_command(
     cfg: AppConfig,
     logger: logging.Logger,
@@ -305,23 +418,89 @@ def process_command(
         cfg.tree_structure,
         cfg.ocr,
         cfg.download,
+        cfg.tag_adding,
         tree_processor=tree_processor,
     )
     summary = pipeline.run()
 
     # Determine which mode is enabled for appropriate summary display
-    download_only = cfg.download.enabled and not cfg.ocr.enabled
+    tag_adding_only = (
+        cfg.tag_adding.enabled and not cfg.ocr.enabled and not cfg.download.enabled
+    )
+    download_only = (
+        cfg.download.enabled and not cfg.ocr.enabled and not cfg.tag_adding.enabled
+    )
+    download_and_tag = (
+        cfg.download.enabled and not cfg.ocr.enabled and cfg.tag_adding.enabled
+    )
     download_and_ocr = cfg.download.enabled and cfg.ocr.enabled
 
     # Route to appropriate summary display based on mode
-    if download_only:
-        # Display download-only summary with download statistics
+    if tag_adding_only:
+        _display_tag_adding_summary(
+            logger, summary.get("tag_adding_results", [])
+        )
+        no_key = summary.get("tag_adding_no_key", 0)
+        logger.info(
+            _format_with_emoji(
+                f"Items without citation key (skipped): {no_key}",
+                "\U0001f3f7\ufe0f",
+                "[TAG ADDING]",
+            )
+        )
+        logger.info(
+            _format_with_emoji(
+                f"Items marked as processed: {summary.get('tag_adding_processed', 0)}",
+                "\U0001f3f7\ufe0f",
+                "[TAG ADDING]",
+            )
+        )
+    elif download_only:
         _display_download_summary(logger, summary)
+    elif download_and_tag:
+        _display_download_summary(logger, summary)
+        eligible = summary.get("tag_adding_eligible", 0)
+        logger.info(
+            _format_with_emoji(
+                f"Eligible for Tag Adding (download succeeded): {eligible}",
+                "\U0001f3f7\ufe0f",
+                "[ELIGIBLE]",
+            )
+        )
+        _display_tag_adding_summary(
+            logger, summary.get("tag_adding_results", [])
+        )
+        no_key = summary.get("tag_adding_no_key", 0)
+        logger.info(
+            _format_with_emoji(
+                f"Items without citation key (skipped): {no_key}",
+                "\U0001f3f7\ufe0f",
+                "[TAG ADDING]",
+            )
+        )
+        logger.info(
+            _format_with_emoji(
+                f"Items marked as processed: {summary.get('tag_adding_processed', 0)}",
+                "\U0001f3f7\ufe0f",
+                "[TAG ADDING]",
+            )
+        )
     elif download_and_ocr:
-        # Display combined summary with both download and OCR results
         _display_combined_summary(logger, summary)
+        if cfg.tag_adding.enabled:
+            _display_tag_adding_summary(
+                logger, summary.get("tag_adding_results", [])
+            )
+            no_key = summary.get("tag_adding_no_key", 0)
+            logger.info(
+                _format_with_emoji(
+                    f"Items without citation key (skipped): {no_key}",
+                    "\U0001f3f7\ufe0f",
+                    "[TAG ADDING]",
+                )
+            )
     else:
-        # Display OCR-only summary (backward compatible)
+        # OCR-only or OCR + tag-adding
         results = summary.get("results", [])
         skipped_items = summary.get("skipped_items", 0)
         total_time = summary.get("total_time", 0.0)
@@ -337,6 +516,19 @@ def process_command(
         log_summary_table(logger, results, skipped_items)
         log_timing_summary(logger, float(total_time))
         log_error_summary(logger, results)
+
+        if cfg.tag_adding.enabled:
+            _display_tag_adding_summary(
+                logger, summary.get("tag_adding_results", [])
+            )
+            no_key = summary.get("tag_adding_no_key", 0)
+            logger.info(
+                _format_with_emoji(
+                    f"Items without citation key (skipped): {no_key}",
+                    "\U0001f3f7\ufe0f",
+                    "[TAG ADDING]",
+                )
+            )
 
     # Determine exit code based on summary
     return _determine_exit_code(summary)

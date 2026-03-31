@@ -604,3 +604,43 @@ def log_error_summary(logger: logging.Logger, results: list[ProcessingResult]) -
     logger.info("To retry failed items:")
     logger.info("  1. Remove 'docai-error' tag from failed items in Zotero")
     logger.info("  2. Re-run the pipeline")
+
+
+def log_tag_adding_start(
+    logger: logging.Logger, item_count: int, tag_count: int
+) -> None:
+    """Log the start of tag adding processing.
+
+    Args:
+        logger: Logger instance to use for logging
+        item_count: Number of candidate items to process
+        tag_count: Number of tags to apply
+    """
+    message = f"Tag Adding: processing {item_count} candidate items with {tag_count} tags"
+    formatted_message = _format_with_emoji(message, "🏷️", "[TAG ADDING]")
+    logger.info(formatted_message)
+
+
+def log_tag_adding_result(logger: logging.Logger, result: "TagAddingResult") -> None:
+    """Log the result of a tag adding operation for a single item.
+
+    Args:
+        logger: Logger instance to use for logging
+        result: TagAddingResult object with outcome details
+    """
+    from zotero_docai_pipeline.domain.models import TagAddingResult  # noqa: F811
+
+    if result.tags_failed:
+        message = (
+            f"Tag Adding failed for \"{result.item_title}\" ({result.item_key}): "
+            f"{len(result.tags_failed)} tag(s) failed ({result.tags_failed})"
+        )
+        formatted_message = _format_with_emoji(message, "❌", "[TAG ADDING ERROR]")
+        logger.warning(formatted_message)
+    else:
+        message = (
+            f"Tag Adding OK for \"{result.item_title}\" ({result.item_key}): "
+            f"{len(result.tags_added)} tag(s) applied"
+        )
+        formatted_message = _format_with_emoji(message, "✓", "[TAG ADDING OK]")
+        logger.info(formatted_message)

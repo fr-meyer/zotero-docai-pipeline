@@ -812,6 +812,72 @@ class Pipeline:
 
         return results, no_key_count
 
+    def _apply_output_tag_to_eligible_items(
+        self,
+        items: list[dict[str, Any]],
+        tag_adding_results: list[TagAddingResult],
+    ) -> int:
+        """Apply the processed tag using the original eligible item list.
+
+        Matched items only receive the processed tag if their assigned tags
+        succeeded. Unmatched items, including those without citation keys, still
+        receive the processed tag to mirror the OCR success path.
+        """
+        processed_count = 0
+        results_by_item_key = {
+            result.item_key: result for result in tag_adding_results
+        }
+
+        for item in items:
+            item_key = item.get("key", "")
+            matched_result = results_by_item_key.get(item_key)
+            item_matched = matched_result is not None
+            item_succeeded = item_matched and not matched_result.tags_failed
+
+            if not (item_succeeded or not item_matched):
+                continue
+
+            try:
+                self.zotero_client.add_tag(
+                    item_key, self.zotero_config.tags.output
+                )
+                processed_count += 1
+            except ZoteroClientError as e:
+                if matched_result is not None:
+                    matched_result.tags_failed.append(self.zotero_config.tags.output)
+                self.logger.warning(
+                    f"Failed to add processed tag to {item_key}: {e}"
+                )
+            except Exception as e:
+                if matched_result is not None:
+                    matched_result.tags_failed.append(self.zotero_config.tags.output)
+                self.logger.warning(
+                    f"Failed to add processed tag to {item_key}: {e}"
+                )
+
+        return processed_count
+
+    @staticmethod
+    def _merge_disk_backed_pdfs(
+        pdfs: list[tuple[bytes, str, str, str]],
+        disk_pdfs: list[tuple[bytes, str, str, str]],
+    ) -> int:
+        """Supplement missing in-memory PDFs with disk-backed entries."""
+        known_pdf_keys = {(item_key, attachment_key) for _, _, item_key, attachment_key in pdfs}
+        supplemented_count = 0
+
+        for disk_pdf in disk_pdfs:
+            _, _, item_key, attachment_key = disk_pdf
+            pdf_key = (item_key, attachment_key)
+            if pdf_key in known_pdf_keys:
+                continue
+
+            pdfs.append(disk_pdf)
+            known_pdf_keys.add(pdf_key)
+            supplemented_count += 1
+
+        return supplemented_count
+
     def _collect_all_pdfs(
         self, items: list[dict[str, Any]]
     ) -> list[tuple[bytes, str, str, str]]:
@@ -1771,25 +1837,9 @@ class Pipeline:
             )
             tag_adding_results, no_key_count = self._apply_tag_adding(items)
 
-            # Apply output (processed) tag to fully-succeeded items
-            tag_adding_processed = 0
-            for result in tag_adding_results:
-                if not result.tags_failed:
-                    try:
-                        self.zotero_client.add_tag(
-                            result.item_key, self.zotero_config.tags.output
-                        )
-                        tag_adding_processed += 1
-                    except ZoteroClientError as e:
-                        result.tags_failed.append(self.zotero_config.tags.output)
-                        self.logger.warning(
-                            f"Failed to add processed tag to {result.item_key}: {e}"
-                        )
-                    except Exception as e:
-                        result.tags_failed.append(self.zotero_config.tags.output)
-                        self.logger.warning(
-                            f"Failed to add processed tag to {result.item_key}: {e}"
-                        )
+            tag_adding_processed = self._apply_output_tag_to_eligible_items(
+                items, tag_adding_results
+            )
 
             # Recompute after possible mutations
             tag_adding_failed = sum(
@@ -1929,24 +1979,9 @@ class Pipeline:
                 )
                 tag_adding_results, no_key_count = self._apply_tag_adding(download_succeeded_items)
 
-                # Apply output (processed) tag to fully-succeeded items
-                for result in tag_adding_results:
-                    if not result.tags_failed:
-                        try:
-                            self.zotero_client.add_tag(
-                                result.item_key, self.zotero_config.tags.output
-                            )
-                            tag_adding_processed += 1
-                        except ZoteroClientError as e:
-                            result.tags_failed.append(self.zotero_config.tags.output)
-                            self.logger.warning(
-                                f"Failed to add processed tag to {result.item_key}: {e}"
-                            )
-                        except Exception as e:
-                            result.tags_failed.append(self.zotero_config.tags.output)
-                            self.logger.warning(
-                                f"Failed to add processed tag to {result.item_key}: {e}"
-                            )
+                tag_adding_processed = self._apply_output_tag_to_eligible_items(
+                    download_succeeded_items, tag_adding_results
+                )
 
                 # Recompute after possible mutations
                 tag_adding_failed = sum(
@@ -2006,8 +2041,12 @@ class Pipeline:
 
         # Read PDFs from disk if download is enabled
         if self.download_config.enabled and self._download_path_mapping:
-            pdfs = self._read_pdfs_from_disk(self._download_path_mapping)
-            self.logger.info(f"Reading {len(pdfs)} PDFs from disk for OCR upload")
+            disk_pdfs = self._read_pdfs_from_disk(self._download_path_mapping)
+            supplemented_pdfs = self._merge_disk_backed_pdfs(pdfs, disk_pdfs)
+            self.logger.info(
+                f"Read {len(disk_pdfs)} PDFs from disk for OCR upload; "
+                f"supplemented {supplemented_pdfs} missing in-memory PDFs"
+            )
 
         # Handle empty PDFs case
         if not pdfs:

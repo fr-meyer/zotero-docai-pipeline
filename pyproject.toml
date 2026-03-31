@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zotero-docai-pipeline"
-version = "0.2.0"
+version = "0.3.0"
 description = "Automate PDF-to-Markdown extraction for Zotero attachments using OCR providers (PageIndex or Mistral). Results are saved as rich text Zotero notes ready for Notero/Notion sync, with optional hierarchical tree structure extraction."
 readme = "README.md"
 requires-python = ">=3.8"

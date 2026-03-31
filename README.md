@@ -1,6 +1,6 @@
 # zotero-docai-pipeline
 
-![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
@@ -41,6 +41,18 @@ Test your configuration without creating notes:
 ```bash
 python main.py processing.dry_run=true ocr.enabled=true
 ```
+
+Dry-run mode performs the full item-selection logic but **does not write any tags or notes** to Zotero. For every matched item the following details are logged:
+
+- **Title**
+- **Citation key** — displayed as `[none]` when absent
+- **DOI** — displayed as `[none]` when absent
+- **Author summary** — e.g. `"Smith, Doe, and Lee"` or `[no authors]`
+- **PDF attachment count**
+- **Current tags** on the item
+- **Would-apply tags** — the success tags that would be written on a real run
+
+A summary line is printed at the end showing the total matched items, total PDFs, and total excluded items.
 
 ## Installation
 
@@ -148,7 +160,9 @@ Items are selected for processing based on **include** and **exclude** tag rules
 
 - **`selection.include.values`** — a list of tags an item must carry to be eligible. Multiple tags are combined with the `include.operator` (`and` requires all tags; `or` requires at least one).
 - **`selection.exclude.values`** — a list of tags that disqualify an item. Combined with the `exclude.operator` using the same logic.
-- When an item matches both include and exclude rules, `conflict_resolution: exclude_wins` ensures the item is skipped.
+- **`conflict_resolution`** controls what happens when an item matches both include and exclude rules:
+  - **`exclude_wins`** *(default)* — the item is excluded and not processed.
+  - **`include_wins`** — the item is included and processed normally.
 
 ### Success and Error Tagging
 
@@ -160,6 +174,19 @@ After processing, the pipeline applies outcome-based tags:
 ### Rich Metadata
 
 Setting `tagging.include_abstract: true` includes the item's abstract in `paper_metadata` passed to the OCR provider, which can improve extraction quality for academic papers.
+
+### Processing Summary Output
+
+Each processed item's entry in `processing_summary.json` contains a nested **`paper_metadata`** block with the following fields:
+
+- `citation_key`, `title`, `doi`, `item_type`, `date`, `year`, `publication_title`
+- `authors`, `editors`, `author_count`, `author_string`
+- `tags`, `collections`, `zotero_uri`
+- `attachments` (PDF-only)
+
+**Omit-missing-keys rule:** optional fields that are absent from the Zotero item are omitted from the JSON entirely — they are never emitted as `null`.
+
+**`tagging.include_abstract` flag:** when `true`, `abstract_note` is included in `paper_metadata`; when `false` (the default), it is omitted.
 
 ### Default Configuration
 

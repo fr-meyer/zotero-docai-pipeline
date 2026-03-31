@@ -496,8 +496,8 @@ class ZoteroClient:
         excluded_keys: set[str] = set()
         excluded_by_rule: dict[str, int] = {
             "exclude_rule": 0,
-            "conflict_resolution_include_wins": 0,
         }
+        kept_by_conflict_include_wins = 0
         exclude_values = selection_cfg.exclude.values
 
         if exclude_values:
@@ -518,7 +518,7 @@ class ZoteroClient:
                         excluded_keys.add(item_key)
                         excluded_by_rule["exclude_rule"] += 1
                     else:  # include_wins
-                        excluded_by_rule["conflict_resolution_include_wins"] += 1
+                        kept_by_conflict_include_wins += 1
 
         final_keys = set(candidate_map.keys()) - excluded_keys
 
@@ -527,6 +527,11 @@ class ZoteroClient:
             f"{len(final_keys)} remaining "
             f"(conflict_resolution={selection_cfg.conflict_resolution!r})"
         )
+        if kept_by_conflict_include_wins > 0:
+            logger.info(
+                "Kept %d conflicting item(s) because conflict_resolution='include_wins'",
+                kept_by_conflict_include_wins,
+            )
 
         # ------------------------------------------------------------------
         # 4. Enrichment
@@ -559,8 +564,10 @@ class ZoteroClient:
                         )
             except Exception as e:
                 logger.warning(
-                    f"Failed to fetch children for item {item_key}: {e}"
+                    f"Failed to fetch children for item {item_key}: {e}",
+                    exc_info=True,
                 )
+                raise
 
             paper_metadata = self._extract_paper_metadata(
                 item_data, include_abstract, item_key=item_key,

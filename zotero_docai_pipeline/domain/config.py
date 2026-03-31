@@ -100,30 +100,63 @@ class TaggingConfig:
                 f"got {self.selection.conflict_resolution!r}"
             )
 
-        for v in self.selection.include.values:
-            if not v.strip():
-                raise ConfigError(
-                    f"tagging.selection.include.values contains a "
-                    f"whitespace-only or empty tag: {v!r}"
-                )
-        for v in self.selection.exclude.values:
-            if not v.strip():
-                raise ConfigError(
-                    f"tagging.selection.exclude.values contains a "
-                    f"whitespace-only or empty tag: {v!r}"
-                )
+        _validate_tag_values(
+            self.selection.include.values,
+            "tagging.selection.include.values",
+        )
+        _validate_tag_values(
+            self.selection.exclude.values,
+            "tagging.selection.exclude.values",
+        )
+        _validate_tag_values(
+            self.apply_on_success.values,
+            "tagging.apply_on_success.values",
+        )
+        _validate_tag_values(
+            self.apply_on_error.values,
+            "tagging.apply_on_error.values",
+        )
 
-        self.selection.include.values = _strip_dedup(self.selection.include.values)
-        self.selection.exclude.values = _strip_dedup(self.selection.exclude.values)
-        self.apply_on_success.values = _strip_dedup(self.apply_on_success.values)
-        self.apply_on_error.values = _strip_dedup(self.apply_on_error.values)
+        self.selection.include.values = _strip_dedup(
+            self.selection.include.values,
+            "tagging.selection.include.values",
+        )
+        self.selection.exclude.values = _strip_dedup(
+            self.selection.exclude.values,
+            "tagging.selection.exclude.values",
+        )
+        self.apply_on_success.values = _strip_dedup(
+            self.apply_on_success.values,
+            "tagging.apply_on_success.values",
+        )
+        self.apply_on_error.values = _strip_dedup(
+            self.apply_on_error.values,
+            "tagging.apply_on_error.values",
+        )
 
 
-def _strip_dedup(values: list[str]) -> list[str]:
+def _validate_tag_values(values: list[object], field_name: str) -> None:
+    """Validate that tag values are strings and not empty after trimming."""
+    for v in values:
+        if not isinstance(v, str):
+            raise ConfigError(
+                f"{field_name} contains a non-string tag value: {v!r}"
+            )
+        if not v.strip():
+            raise ConfigError(
+                f"{field_name} contains a whitespace-only or empty tag: {v!r}"
+            )
+
+
+def _strip_dedup(values: list[object], field_name: str) -> list[str]:
     """Strip whitespace and deduplicate a list of strings, preserving order."""
     seen: set[str] = set()
     result: list[str] = []
     for v in values:
+        if not isinstance(v, str):
+            raise ConfigError(
+                f"{field_name} contains a non-string tag value: {v!r}"
+            )
         stripped = v.strip()
         if stripped and stripped not in seen:
             seen.add(stripped)

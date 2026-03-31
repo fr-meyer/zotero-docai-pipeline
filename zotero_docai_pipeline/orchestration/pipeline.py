@@ -1906,9 +1906,10 @@ class Pipeline:
         # Early exit for download-only mode
         if self.download_config.enabled and not self.ocr_config.enabled:
             self.logger.info("Download-only mode: OCR disabled, skipping OCR phases")
+            apply_processed_tag_on_download = not self.tag_adding_config.enabled
             self._tag_items_based_on_download(
                 items, download_summary, self._download_path_mapping,
-                apply_processed_tag=True,
+                apply_processed_tag=apply_processed_tag_on_download,
             )
 
             # Compute items that succeeded download (includes no-PDF items as vacuously successful)
@@ -1950,6 +1951,10 @@ class Pipeline:
                     total_assigned_tags,
                 )
                 tag_adding_results, no_key_count = self._apply_tag_adding(download_succeeded_items)
+                tag_adding_processed = self._apply_output_tag_to_eligible_items(
+                    download_succeeded_items,
+                    tag_adding_results,
+                )
 
                 # Recompute after possible mutations
                 tag_adding_failed = sum(
@@ -1959,7 +1964,6 @@ class Pipeline:
                     1 for r in tag_adding_results if not r.tags_failed
                 )
                 tag_adding_matched = len(tag_adding_results)
-                tag_adding_processed = len(download_succeeded_items)
 
             # Return early with download-only summary
             total_time = time.time() - start_time

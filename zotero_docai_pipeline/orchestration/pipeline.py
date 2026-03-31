@@ -780,7 +780,8 @@ class Pipeline:
                     tags_failed = list(effective_tags)
                 except Exception as e:
                     self.logger.warning(
-                        f"Unexpected error replacing tags on {item_key}: {e}"
+                        f"Unexpected error replacing tags on {item_key}: {e}",
+                        exc_info=True,
                     )
                     tags_added = []
                     tags_failed = list(effective_tags)
@@ -796,7 +797,8 @@ class Pipeline:
                         tags_failed.append(tag)
                     except Exception as e:
                         self.logger.warning(
-                            f"Unexpected error adding tag '{tag}' to {item_key}: {e}"
+                            f"Unexpected error adding tag '{tag}' to {item_key}: {e}",
+                            exc_info=True,
                         )
                         tags_failed.append(tag)
 
@@ -834,7 +836,7 @@ class Pipeline:
             item_matched = matched_result is not None
             item_succeeded = item_matched and not matched_result.tags_failed
 
-            if not (item_succeeded or not item_matched):
+            if item_matched and not item_succeeded:
                 continue
 
             try:

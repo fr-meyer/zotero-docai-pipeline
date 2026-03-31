@@ -11,6 +11,7 @@ Automate PDF-to-Markdown extraction for Zotero attachments using OCR providers (
 - [Quick Start](#quick-start)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Item Selection & Tagging](#item-selection--tagging)
 - [Tag Adding](#tag-adding)
 - [PDF Download](#pdf-download)
 - [Extraction Modes](#extraction-modes)
@@ -23,7 +24,7 @@ Automate PDF-to-Markdown extraction for Zotero attachments using OCR providers (
 Complete the [Installation](#installation) steps first, then follow this workflow:
 
 1. **Tag items in Zotero:**
-   - Tag items you want to process with `docai` tag
+   - Tag items you want to process with the configured include tag (default: `docai`)
 
 2. **Run the pipeline:**
    ```bash
@@ -32,7 +33,7 @@ Complete the [Installation](#installation) steps first, then follow this workflo
 
 3. **Verify results:**
    - Check your Zotero library for newly created notes
-   - Successfully processed items are tagged with `docai-processed`
+   - Successfully processed items are tagged with the configured success tag(s) (default: `docai-processed`)
 
 ### Dry-Run Mode
 
@@ -95,7 +96,14 @@ The pipeline uses Hydra for configuration management. Most settings can be overr
 | `tree_structure.enabled` | boolean | `true` | Enable hierarchical tree structure extraction |
 | `processing.extraction_mode` | string | `all_at_once` | Note organization mode (`all_at_once` or `page_by_page`) |
 | `processing.batch_size` | integer | varies | Batch processing size (provider-dependent) |
-| `download.tag` | string | `docai` | Primary Zotero tag used by `Pipeline._discover_items()` to select items for download/tagging; falls back to `zotero.tags.input` if unset |
+| `tagging.selection.include.values` | list | `[docai]` | Tags items must match to be selected for processing |
+| `tagging.selection.include.operator` | string | `or` | How include tags are combined (`and` / `or`) |
+| `tagging.selection.exclude.values` | list | `[docai-processed]` | Tags that disqualify items from selection |
+| `tagging.selection.exclude.operator` | string | `or` | How exclude tags are combined (`and` / `or`) |
+| `tagging.apply_on_success.values` | list | `[docai-processed]` | Tags added to items on successful processing |
+| `tagging.apply_on_error.values` | list | `[docai-error]` | Tags added to items on failed processing |
+| `tagging.include_abstract` | boolean | `false` | Include abstract in `paper_metadata` passed to OCR |
+| `zotero.error_tagging_enabled` | boolean | `true` | Whether error tags are applied on failure |
 | `download.upload_folder` | string | `./downloads` | Local directory for downloaded PDFs |
 | `download.max_concurrent_downloads` | integer | `5` | Maximum number of concurrent downloads |
 | `processing.cleanup_uploaded_files` | boolean | `false` | Controls file deletion after processing (default: false = keep files) |
@@ -130,6 +138,67 @@ python main.py processing.extraction_mode=page_by_page ocr.enabled=true
 python main.py ocr=pageindex tree_structure.enabled=true processing.dry_run=true ocr.enabled=true
 ```
 
+## Item Selection & Tagging
+
+The pipeline uses a flexible, config-driven tagging system to control which items are processed and how they are tagged afterward. All tagging behaviour is defined under the `tagging` config group.
+
+### Item Selection (`tagging.selection`)
+
+Items are selected for processing based on **include** and **exclude** tag rules:
+
+- **`selection.include.values`** — a list of tags an item must carry to be eligible. Multiple tags are combined with the `include.operator` (`and` requires all tags; `or` requires at least one).
+- **`selection.exclude.values`** — a list of tags that disqualify an item. Combined with the `exclude.operator` using the same logic.
+- When an item matches both include and exclude rules, `conflict_resolution: exclude_wins` ensures the item is skipped.
+
+### Success and Error Tagging
+
+After processing, the pipeline applies outcome-based tags:
+
+- **`apply_on_success.values`** — tags added to items that were processed successfully (default: `[docai-processed]`).
+- **`apply_on_error.values`** — tags added to items that failed during processing (default: `[docai-error]`). Error tagging can be disabled globally by setting `zotero.error_tagging_enabled: false`.
+
+### Rich Metadata
+
+Setting `tagging.include_abstract: true` includes the item's abstract in `paper_metadata` passed to the OCR provider, which can improve extraction quality for academic papers.
+
+### Default Configuration
+
+The full default tagging configuration (`conf/tagging/default.yaml`):
+
+```yaml
+# Tagging workflow configuration
+selection:
+  include:
+    values:
+      - docai
+    operator: "or"
+  exclude:
+    values:
+      - docai-processed
+    operator: "or"
+  conflict_resolution: "exclude_wins"
+
+apply_on_success:
+  values:
+    - docai-processed
+  mode: "append_all"
+
+apply_on_error:
+  values:
+    - docai-error
+  mode: "append_all"
+
+include_abstract: false
+```
+
+### Overriding via CLI
+
+Override tagging settings from the command line:
+
+```bash
+python main.py "tagging.selection.include.values=[my-tag]"
+```
+
 ## Tag Adding
 
 Optional step that applies Zotero tags to items by matching their **citation keys** (no OCR/notes are created in tag-adding-only mode).
@@ -160,8 +229,6 @@ Optional step that downloads PDFs from Zotero items to local disk (used as an in
 
 ### Key configuration
 - `download.enabled`: set to `true` to enable PDF downloads.
-- `download.tag`: primary Zotero tag that `Pipeline._discover_items()` uses to select items for downloading and processing (default: `docai`).
-- `zotero.tags.input`: backward-compatible fallback tag used by `Pipeline._discover_items()` when `download.tag` is absent.
 - `download.upload_folder`: local directory for downloaded PDFs (default: `./downloads`).
 - `download.preserve_filenames`: whether to preserve the original PDF filenames (default: `true`).
 - `download.create_subfolders`: whether to create subfolders under `upload_folder` (default: `false`).
@@ -208,8 +275,8 @@ Common issues and solutions when running the pipeline:
 ### No Items Found
 
 Verify:
-- Items are tagged with the input tag (default: `docai`) - see [Quick Start](#quick-start)
-- Items are not already tagged with the output tag (default: `docai-processed`)
+- Items are tagged with the configured include tag(s) (see `tagging.selection.include.values`, default: `docai`)
+- Items are not already tagged with the configured exclude tag(s) (see `tagging.selection.exclude.values`, default: `docai-processed`)
 - `zotero.library_id` is correctly configured
 - Zotero API key has access to the specified library
 

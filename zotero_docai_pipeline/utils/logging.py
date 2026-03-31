@@ -631,7 +631,8 @@ def log_error_summary(logger: logging.Logger, results: list[ProcessingResult]) -
 
     # Log retry instructions
     logger.info("To retry failed items:")
-    logger.info("  1. Remove 'docai-error' tag from failed items in Zotero")
+    logger.info("  1. Remove the configured error tag(s) from failed items in Zotero")
+    logger.info("     (see tagging.apply_on_error.values in your tagging config)")
     logger.info("  2. Re-run the pipeline")
 
 

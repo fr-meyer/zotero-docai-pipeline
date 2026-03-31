@@ -2244,12 +2244,16 @@ class Pipeline:
                     if item_tag_results:
                         tag_adding_results_ocr.append(item_tag_results[0])
 
-                    # Step B: apply processing success tags if item matched and
-                    # all tags succeeded, or if OCR succeeded with no assignment match.
+                    # Step B: apply processing tags based on tag-adding outcome.
                     item_matched = bool(item_tag_results)
                     item_succeeded = item_matched and not item_tag_results[0].tags_failed
-                    should_add_output_tag = item_succeeded or not item_matched
-                    if should_add_output_tag:
+
+                    if item_matched and item_succeeded:
+                        self._apply_processing_tags(item.key, success=True)
+                        tag_adding_processed += 1
+                    elif item_matched and not item_succeeded:
+                        self._apply_processing_tags(item.key, success=False)
+                    else:
                         self._apply_processing_tags(item.key, success=True)
                         tag_adding_processed += 1
                 else:

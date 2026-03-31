@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.eggs/
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+
+# Environment
+venv/
+.venv/
+env/
+.env
+.env.local
+
+# Generated output and logs
+outputs/
+*.log
+test_results_full.log
+
+# Data / assets (comment out if you want to track these)
+Zotero/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/

@@ -1,0 +1,18 @@
+{
+  "include": [
+    "zotero_docai_pipeline",
+    "main.py"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/venv",
+    "**/build",
+    "**/dist",
+    "**/*.egg-info"
+  ],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false
+}

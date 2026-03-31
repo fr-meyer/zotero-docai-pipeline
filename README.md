@@ -1,6 +1,6 @@
 # zotero-docai-pipeline
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
@@ -11,6 +11,8 @@ Automate PDF-to-Markdown extraction for Zotero attachments using OCR providers (
 - [Quick Start](#quick-start)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Tag Adding](#tag-adding)
+- [PDF Download](#pdf-download)
 - [Extraction Modes](#extraction-modes)
 - [Troubleshooting](#troubleshooting)
 - [License](#license)
@@ -25,7 +27,7 @@ Complete the [Installation](#installation) steps first, then follow this workflo
 
 2. **Run the pipeline:**
    ```bash
-   python main.py
+   python main.py ocr.enabled=true
    ```
 
 3. **Verify results:**
@@ -36,7 +38,7 @@ Complete the [Installation](#installation) steps first, then follow this workflo
 
 Test your configuration without creating notes:
 ```bash
-python main.py processing.dry_run=true
+python main.py processing.dry_run=true ocr.enabled=true
 ```
 
 ## Installation
@@ -87,9 +89,15 @@ The pipeline uses Hydra for configuration management. Most settings can be overr
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `ocr.provider` | string | `pageindex` | OCR provider selection (`mistral` or `pageindex`) |
+| `ocr.enabled` | boolean | `false` | Enable OCR processing (required to create notes) |
+| `download.enabled` | boolean | `false` | Enable PDF download from Zotero |
+| `tag_adding.enabled` | boolean | `false` | Enable citationKey-based Zotero tag assignment |
 | `tree_structure.enabled` | boolean | `true` | Enable hierarchical tree structure extraction |
 | `processing.extraction_mode` | string | `all_at_once` | Note organization mode (`all_at_once` or `page_by_page`) |
 | `processing.batch_size` | integer | varies | Batch processing size (provider-dependent) |
+| `download.tag` | string | `docai` | Primary Zotero tag used by `Pipeline._discover_items()` to select items for download/tagging; falls back to `zotero.tags.input` if unset |
+| `download.upload_folder` | string | `./downloads` | Local directory for downloaded PDFs |
+| `download.max_concurrent_downloads` | integer | `5` | Maximum number of concurrent downloads |
 | `processing.cleanup_uploaded_files` | boolean | `false` | Controls file deletion after processing (default: false = keep files) |
 
 ### Choosing an OCR Provider
@@ -110,16 +118,67 @@ The pipeline supports two OCR providers:
 Override configuration from the command line:
 ```bash
 # Change OCR provider
-python main.py ocr=pageindex
+python main.py ocr=pageindex ocr.enabled=true
 
 # Enable/disable tree extraction
-python main.py tree_structure.enabled=true
+python main.py tree_structure.enabled=true ocr.enabled=true
 
 # Change extraction mode
-python main.py processing.extraction_mode=page_by_page
+python main.py processing.extraction_mode=page_by_page ocr.enabled=true
 
 # Multiple overrides
-python main.py ocr=pageindex tree_structure.enabled=true processing.dry_run=true
+python main.py ocr=pageindex tree_structure.enabled=true processing.dry_run=true ocr.enabled=true
+```
+
+## Tag Adding
+
+Optional step that applies Zotero tags to items by matching their **citation keys** (no OCR/notes are created in tag-adding-only mode).
+
+### Key configuration
+- `tag_adding.enabled`: set to `true` to enable tag adding.
+- `tag_adding.assignments`: a dictionary mapping `citation_key -> list[str]` (tags to add).
+- `tag_adding.replace_all_existing_tags` (opt-in, destructive): when `true`, all existing tags are replaced with the assigned tags.
+
+### Citation key matching
+- Matching is **exact**, **case-sensitive**, and **whitespace-trimmed**.
+- The citation key is resolved from Zotero data using this precedence:
+  1. `item["data"]["citationKey"]` (preferred when present and non-empty)
+  2. a `Citation Key: <key>` line in `item["data"]["extra"]`
+
+### Environment override (recommended for large mappings)
+- If you set `TAG_ADDING_ASSIGNMENTS_JSON` to a JSON object of the form `{ "citation_key": ["tag1", "tag2"] }`, the app will enable tag-adding automatically.
+
+Example:
+```bash
+export TAG_ADDING_ASSIGNMENTS_JSON='{"Smith2020":["docai-tag1","docai-tag2"]}'
+python main.py tag_adding.enabled=true
+```
+
+## PDF Download
+
+Optional step that downloads PDFs from Zotero items to local disk (used as an input for OCR, and also supported in download-only mode).
+
+### Key configuration
+- `download.enabled`: set to `true` to enable PDF downloads.
+- `download.tag`: primary Zotero tag that `Pipeline._discover_items()` uses to select items for downloading and processing (default: `docai`).
+- `zotero.tags.input`: backward-compatible fallback tag used by `Pipeline._discover_items()` when `download.tag` is absent.
+- `download.upload_folder`: local directory for downloaded PDFs (default: `./downloads`).
+- `download.preserve_filenames`: whether to preserve the original PDF filenames (default: `true`).
+- `download.create_subfolders`: whether to create subfolders under `upload_folder` (default: `false`).
+- `download.skip_existing`: whether to skip PDFs that already exist locally (default: `true`).
+- `download.max_concurrent_downloads`: maximum number of concurrent downloads (default: `5`).
+- Retry is configurable via `download.retry.*` (see `conf/download/default.yaml`).
+
+### Important constraint
+- `processing.dry_run=true` cannot be combined with `download.enabled=true`.
+
+Examples:
+```bash
+# Download-only
+python main.py download.enabled=true
+
+# Download + OCR
+python main.py download.enabled=true ocr.enabled=true
 ```
 
 ## Extraction Modes

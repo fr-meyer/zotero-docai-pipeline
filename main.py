@@ -1,5 +1,6 @@
 """Main entry point for Zotero Document AI Pipeline."""
 
+import json
 import logging
 import os
 import sys
@@ -27,6 +28,7 @@ from zotero_docai_pipeline.domain.config import (
     ProcessingConfig,
     RetryConfig,
     StorageConfig,
+    TagAddingConfig,
     TreeStructureConfig,
     ZoteroConfig,
     register_configs,
@@ -139,8 +141,9 @@ def validate_flags(cfg: AppConfig) -> None:
     1. Mutually exclusive flags: processing.dry_run and download.enabled cannot
        both be True. Dry-run mode is for testing configuration without actual
        operations, while download is an actual operation.
-    2. At least one operation enabled: Either download.enabled or ocr.enabled
-       must be True. The pipeline requires at least one operation to perform.
+    2. At least one operation enabled: At least one of download.enabled,
+       ocr.enabled, or tag_adding.enabled must be True. The pipeline requires
+       at least one operation to perform.
 
     Args:
         cfg: Application configuration object
@@ -160,10 +163,10 @@ def validate_flags(cfg: AppConfig) -> None:
         )
 
     # Check at least one operation must be enabled
-    if not cfg.download.enabled and not cfg.ocr.enabled:
+    if not cfg.download.enabled and not cfg.ocr.enabled and not cfg.tag_adding.enabled:
         raise ConfigError(
             "Invalid configuration: at least one operation must be enabled. "
-            "Set download.enabled=true or ocr.enabled=true."
+            "Set download.enabled=true, ocr.enabled=true, or tag_adding.enabled=true."
         )
 
     logger.debug("Flag configuration validated successfully")
@@ -313,6 +316,52 @@ def main(cfg: DictConfig) -> int:
         # Construct RetryConfig from DictConfig before passing to DownloadConfig
         retry_config = RetryConfig(**cfg.download.retry)
         download_kw = {k: v for k, v in cfg.download.items() if k != "retry"}
+
+        # Override tag_adding assignments from environment JSON when provided.
+        # This avoids Hydra override grammar limits for large dicts and ensures
+        # TagAddingConfig is constructed with non-empty assignments.
+        env_assignments = os.getenv("TAG_ADDING_ASSIGNMENTS_JSON")
+        if env_assignments:
+            try:
+                parsed_assignments = json.loads(env_assignments)
+                if isinstance(parsed_assignments, dict):
+                    extra_fields = {
+                        k: v
+                        for k, v in cfg.tag_adding.items()
+                        if k not in ("enabled", "assignments")
+                    }
+                    tag_adding_config = TagAddingConfig(
+                        enabled=True,
+                        assignments=parsed_assignments,
+                        **extra_fields,
+                    )
+                else:
+                    logger.error(
+                        "TAG_ADDING_ASSIGNMENTS_JSON must decode to a dict, "
+                        "got %s; falling back to config tag_adding.",
+                        type(parsed_assignments).__name__,
+                    )
+                    tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+            except (ValueError, json.JSONDecodeError) as e:
+                logger.error(
+                    "Failed to parse TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; "
+                    "falling back to config tag_adding.",
+                    env_assignments,
+                    e,
+                )
+                tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+            except Exception as e:
+                logger.error(
+                    "Failed to build TagAddingConfig from "
+                    "TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; falling back to config "
+                    "tag_adding.",
+                    env_assignments,
+                    e,
+                )
+                tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+        else:
+            tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+
         app_cfg = AppConfig(
             zotero=ZoteroConfig(**cfg.zotero),
             ocr=ocr_config,
@@ -320,6 +369,7 @@ def main(cfg: DictConfig) -> int:
             storage=StorageConfig(**cfg.storage),
             tree_structure=tree_structure_config,
             download=DownloadConfig(retry=retry_config, **download_kw),
+            tag_adding=tag_adding_config,
         )
 
         # Validate flag configuration

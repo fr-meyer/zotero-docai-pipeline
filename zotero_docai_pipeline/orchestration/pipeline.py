@@ -2185,7 +2185,7 @@ class Pipeline:
                     pdfs_processed=0,
                     pages_extracted=0,
                     notes_created=0,
-                    errors=[f"Result distribution failed: {str(e)}"],
+                    errors=[f"Result distribution failed: {e!s}"],
                     processing_time=0.0,
                     paper_metadata=item.paper_metadata,
                 )
@@ -2248,10 +2248,7 @@ class Pipeline:
                     item_matched = bool(item_tag_results)
                     item_succeeded = item_matched and not item_tag_results[0].tags_failed
 
-                    if item_matched and item_succeeded:
-                        self._apply_processing_tags(item.key, success=True)
-                        tag_adding_processed += 1
-                    elif item_matched and not item_succeeded:
+                    if item_matched and not item_succeeded:
                         self._apply_processing_tags(item.key, success=False)
                     else:
                         self._apply_processing_tags(item.key, success=True)

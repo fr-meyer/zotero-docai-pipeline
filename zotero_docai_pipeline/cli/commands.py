@@ -28,6 +28,25 @@ from zotero_docai_pipeline.utils.logging import (
 )
 
 
+def attachment_is_pdf(content_type: str | None, filename: str | None) -> bool:
+    """Return True if an attachment should be treated as a PDF."""
+    normalized_content_type = (content_type or "").lower()
+    normalized_filename = (filename or "").lower()
+    return (
+        normalized_content_type == "application/pdf"
+        or normalized_filename.endswith(".pdf")
+    )
+
+
+def count_pdf_attachments(item_attachments: list[Any]) -> int:
+    """Count PDF attachments on an item."""
+    return sum(
+        1
+        for attachment in item_attachments
+        if attachment_is_pdf(attachment.content_type, attachment.filename)
+    )
+
+
 def dry_run_command(
     cfg: AppConfig, logger: logging.Logger, zotero_client: ZoteroClient
 ) -> int:
@@ -49,10 +68,7 @@ def dry_run_command(
         cfg.tagging.selection, cfg.tagging.include_abstract
     )
 
-    total_pdfs = sum(
-        len([a for a in item.attachments if a.content_type == "application/pdf" or a.filename.lower().endswith(".pdf")])
-        for item in items
-    )
+    total_pdfs = sum(count_pdf_attachments(item.attachments) for item in items)
 
     log_config_summary(logger, len(items), cfg.ocr)
     logger.info(f"Total PDF attachments: {total_pdfs}")
@@ -64,9 +80,7 @@ def dry_run_command(
         would_apply = cfg.tagging.apply_on_success.values
 
         for idx, item in enumerate(items, start=1):
-            pdf_count = len(
-                [a for a in item.attachments if a.content_type == "application/pdf" or a.filename.lower().endswith(".pdf")]
-            )
+            pdf_count = count_pdf_attachments(item.attachments)
             header = f" Item {idx}/{len(items)} "
             logger.info(f"{sep_char * 2}{header}{sep_char * (50 - len(header))}")
             logger.info(f"  Title       : {item.title[:60]}")

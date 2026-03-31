@@ -58,9 +58,6 @@ class TagTargetConfig:
     values: list[str] = field(default_factory=list)
     """Tag values to apply."""
 
-    mode: Literal["append_all"] = "append_all"
-    """How to apply tags to items."""
-
 
 @dataclass
 class TaggingConfig:

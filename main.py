@@ -382,11 +382,9 @@ def main(cfg: DictConfig) -> int:
         )
         success_target = TagTargetConfig(
             values=list(cfg.tagging.apply_on_success.values),
-            mode=cfg.tagging.apply_on_success.mode,
         )
         error_target = TagTargetConfig(
             values=list(cfg.tagging.apply_on_error.values),
-            mode=cfg.tagging.apply_on_error.mode,
         )
         tagging_config = TaggingConfig(
             selection=selection_cfg,

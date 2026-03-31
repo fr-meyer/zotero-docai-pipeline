@@ -56,6 +56,18 @@ class ZoteroClient:
     """
 
     @staticmethod
+    def _is_pdf_attachment(
+        content_type: str | None, filename: str | None
+    ) -> bool:
+        """Return True if attachment metadata represents a PDF."""
+        normalized_content_type = (content_type or "").lower()
+        normalized_filename = (filename or "").lower()
+        return (
+            normalized_content_type == "application/pdf"
+            or normalized_filename.endswith(".pdf")
+        )
+
+    @staticmethod
     def _extract_citation_key(item_data: dict[str, Any]) -> str | None:
         """Extract citation key from item metadata.
 
@@ -470,10 +482,7 @@ class ZoteroClient:
                 for tag_result in per_tag_results[1:]:
                     common_keys &= set(tag_result.keys())
                 for key in common_keys:
-                    for tag_result in per_tag_results:
-                        if key in tag_result:
-                            candidate_map[key] = tag_result[key]
-                            break
+                    candidate_map[key] = per_tag_results[0][key]
 
         logger.info(
             f"Tag selection: {len(selection_cfg.include.values)} include tag(s) "
@@ -536,11 +545,14 @@ class ZoteroClient:
                     child_data = child.get("data")
                     if not isinstance(child_data, dict):
                         continue
-                    if child_data.get("contentType") == "application/pdf":
+                    filename = child_data.get("filename", "unknown.pdf")
+                    if self._is_pdf_attachment(
+                        child_data.get("contentType"), filename
+                    ):
                         attachments.append(
                             AttachmentInfo(
                                 key=child.get("key", ""),
-                                filename=child_data.get("filename", "unknown.pdf"),
+                                filename=filename,
                                 content_type=child_data.get("contentType"),
                                 link_mode=child_data.get("linkMode"),
                             )

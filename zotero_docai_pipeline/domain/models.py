@@ -10,7 +10,7 @@ that occur during document processing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Any
 
 
@@ -123,19 +123,21 @@ class PaperMetadata:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a JSON-friendly dict, omitting ``None`` scalar fields."""
-        _scalar_fields = [
-            "item_type", "title", "abstract_note", "date", "year",
-            "publication_title", "journal_abbreviation", "volume", "issue",
-            "pages", "doi", "issn", "isbn", "url", "language", "publisher",
-            "place", "series", "series_title", "short_title", "rights",
-            "extra", "citation_key", "num_pages", "author_string",
-            "zotero_uri",
-        ]
         result: dict[str, Any] = {}
-        for fname in _scalar_fields:
-            val = getattr(self, fname)
+        skipped_fields = {
+            "author_count",
+            "authors",
+            "editors",
+            "tags",
+            "attachments",
+            "collections",
+        }
+        for field_info in fields(self):
+            if field_info.name in skipped_fields:
+                continue
+            val = getattr(self, field_info.name)
             if val is not None:
-                result[fname] = val
+                result[field_info.name] = val
 
         result["author_count"] = self.author_count
         result["authors"] = [self._creator_to_dict(a) for a in self.authors]

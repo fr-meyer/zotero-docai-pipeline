@@ -208,12 +208,10 @@ selection:
 apply_on_success:
   values:
     - docai-processed
-  mode: "append_all"
 
 apply_on_error:
   values:
     - docai-error
-  mode: "append_all"
 
 include_abstract: false
 ```

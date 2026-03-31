@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Configuration dataclasses for the Zotero Document AI Pipeline.
 
@@ -8,6 +10,7 @@ support for configuration values.
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Literal
 
 from hydra.core.config_store import ConfigStore
 
@@ -22,23 +25,143 @@ class ConfigError(Exception):
 
 
 @dataclass
-class ZoteroTagsConfig:
-    """Configuration for Zotero tag-based workflow.
+class TagRuleConfig:
+    """Configuration for a single tag-matching rule."""
 
-    Tags are used to mark items for processing and track processing status.
-    """
+    values: list[str] = field(default_factory=list)
+    """Tag values to match against."""
 
-    input: str = "docai"
-    """Tag that marks items for processing. Items with this tag will be
-    processed by the pipeline."""
+    operator: Literal["and", "or"] = "or"
+    """Logical operator for combining tag matches."""
 
-    output: str = "docai-processed"
-    """Tag added to successfully processed items. Prevents reprocessing of
-    already processed items."""
 
-    error: str = "docai-error"
-    """Tag added to items that fail processing. Use this tag to easily
-    identify and review failed items."""
+@dataclass
+class TagSelectionConfig:
+    """Configuration for selecting items by tag inclusion/exclusion rules."""
+
+    include: TagRuleConfig = field(
+        default_factory=lambda: TagRuleConfig(values=["docai"])
+    )
+    """Rule for tags that must be present on an item."""
+
+    exclude: TagRuleConfig = field(default_factory=TagRuleConfig)
+    """Rule for tags that must not be present on an item."""
+
+    conflict_resolution: Literal["exclude_wins", "include_wins"] = "exclude_wins"
+    """How to resolve when an item matches both include and exclude rules."""
+
+
+@dataclass
+class TagTargetConfig:
+    """Configuration for tags to apply to items after processing."""
+
+    values: list[str] = field(default_factory=list)
+    """Tag values to apply."""
+
+
+@dataclass
+class TaggingConfig:
+    """Configuration for the tag-based item selection and post-processing workflow."""
+
+    selection: TagSelectionConfig = field(default_factory=TagSelectionConfig)
+    """Rules for selecting items to process based on tags."""
+
+    apply_on_success: TagTargetConfig = field(default_factory=TagTargetConfig)
+    """Tags to apply to items after successful processing."""
+
+    apply_on_error: TagTargetConfig = field(default_factory=TagTargetConfig)
+    """Tags to apply to items after failed processing."""
+
+    include_abstract: bool = False
+    """Whether to include the item abstract in processing."""
+
+    def __post_init__(self) -> None:
+        """Validate and normalize tagging configuration."""
+        if not self.selection.include.values:
+            raise ConfigError(
+                "tagging.selection.include.values cannot be empty"
+            )
+
+        if self.selection.include.operator not in {"and", "or"}:
+            raise ConfigError(
+                f"tagging.selection.include.operator must be 'and' or 'or', "
+                f"got {self.selection.include.operator!r}"
+            )
+        if self.selection.exclude.operator not in {"and", "or"}:
+            raise ConfigError(
+                f"tagging.selection.exclude.operator must be 'and' or 'or', "
+                f"got {self.selection.exclude.operator!r}"
+            )
+
+        if self.selection.conflict_resolution not in {"exclude_wins", "include_wins"}:
+            raise ConfigError(
+                f"tagging.selection.conflict_resolution must be "
+                f"'exclude_wins' or 'include_wins', "
+                f"got {self.selection.conflict_resolution!r}"
+            )
+
+        _validate_tag_values(
+            self.selection.include.values,
+            "tagging.selection.include.values",
+        )
+        _validate_tag_values(
+            self.selection.exclude.values,
+            "tagging.selection.exclude.values",
+        )
+        _validate_tag_values(
+            self.apply_on_success.values,
+            "tagging.apply_on_success.values",
+        )
+        _validate_tag_values(
+            self.apply_on_error.values,
+            "tagging.apply_on_error.values",
+        )
+
+        self.selection.include.values = _strip_dedup(
+            self.selection.include.values,
+            "tagging.selection.include.values",
+        )
+        self.selection.exclude.values = _strip_dedup(
+            self.selection.exclude.values,
+            "tagging.selection.exclude.values",
+        )
+        self.apply_on_success.values = _strip_dedup(
+            self.apply_on_success.values,
+            "tagging.apply_on_success.values",
+        )
+        self.apply_on_error.values = _strip_dedup(
+            self.apply_on_error.values,
+            "tagging.apply_on_error.values",
+        )
+
+
+def _validate_tag_values(values: list[object], field_name: str) -> None:
+    """Validate that tag values are strings and not empty after trimming."""
+    for v in values:
+        if not isinstance(v, str):
+            raise ConfigError(
+                f"{field_name} contains a non-string tag value: {v!r}"
+            )
+        if not v.strip():
+            raise ConfigError(
+                f"{field_name} contains a whitespace-only or empty tag: {v!r}"
+            )
+
+
+def _strip_dedup(values: list[object], field_name: str) -> list[str]:
+    """Strip whitespace and deduplicate a list of strings, preserving order."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for v in values:
+        if not isinstance(v, str):
+            raise ConfigError(
+                f"{field_name} contains a non-string tag value: {v!r}"
+            )
+        stripped = v.strip()
+        if stripped and stripped not in seen:
+            seen.add(stripped)
+            result.append(stripped)
+    return result
 
 
 @dataclass
@@ -46,7 +169,7 @@ class ZoteroConfig:
     """Configuration for Zotero API integration.
 
     Contains settings for connecting to and interacting with the Zotero API,
-    including library identification, authentication, and tag-based workflow.
+    including library identification, authentication, and error tagging.
     """
 
     library_id: str
@@ -55,10 +178,6 @@ class ZoteroConfig:
 
     api_key: str
     """Zotero API key. Obtain from https://www.zotero.org/settings/keys"""
-
-    tags: ZoteroTagsConfig = field(default_factory=ZoteroTagsConfig)
-    """Tag-based workflow configuration. Defines tags for input, output, and
-    error states."""
 
     error_tagging_enabled: bool = True
     """Whether to add error tags to failed items. Makes it easy to identify
@@ -266,10 +385,6 @@ class DownloadConfig:
     """Whether PDF download feature is enabled. Default False for backward
     compatibility."""
 
-    tag: str = "docai"
-    """Zotero tag to filter items for download. Only items with this tag
-    will be processed."""
-
     upload_folder: str = "./downloads"
     """Local directory path where downloaded PDFs will be saved."""
 
@@ -293,11 +408,6 @@ class DownloadConfig:
 
     def __post_init__(self) -> None:
         """Validate download configuration parameters."""
-        if not self.tag or not self.tag.strip():
-            raise ConfigError(
-                "tag is required and cannot be empty or whitespace-only. "
-                "Specify a Zotero tag to filter items for download."
-            )
         if not self.upload_folder or not self.upload_folder.strip():
             raise ConfigError(
                 "upload_folder is required and cannot be empty or whitespace-only. "
@@ -604,6 +714,9 @@ class AppConfig:
     tag_adding: TagAddingConfig = field(default_factory=TagAddingConfig)
     """Tag Adding feature configuration."""
 
+    tagging: TaggingConfig = field(default_factory=TaggingConfig)
+    """Tag-based item selection and post-processing workflow configuration."""
+
 
 def register_configs() -> None:
     """Register structured configs with Hydra.
@@ -627,6 +740,7 @@ def register_configs() -> None:
     cs.store(group="tree_structure", name="default", node=TreeStructureConfig)
     cs.store(group="download", name="default", node=DownloadConfig)
     cs.store(group="tag_adding", name="default", node=TagAddingConfig)
+    cs.store(group="tagging", name="default", node=TaggingConfig)
 
     # Register top-level config
     cs.store(name="config", node=AppConfig)

@@ -10,8 +10,182 @@ that occur during document processing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Any
+
+
+@dataclass
+class CreatorInfo:
+    """Bibliographic creator (author or editor) information from a Zotero item."""
+
+    creator_type: str
+    """Creator role, e.g. 'author' or 'editor'."""
+
+    full_name: str | None = None
+    """Single-field name when first/last split is unavailable."""
+
+    first_name: str | None = None
+    """Given name of the creator."""
+
+    last_name: str | None = None
+    """Family name of the creator."""
+
+
+@dataclass
+class AttachmentInfo:
+    """Metadata for a file attachment linked to a Zotero item."""
+
+    key: str
+    """Zotero attachment key."""
+
+    filename: str
+    """Original filename of the attachment."""
+
+    content_type: str | None = None
+    """MIME type of the attachment, e.g. 'application/pdf'."""
+
+    link_mode: str | None = None
+    """Zotero link mode, e.g. 'imported_file' or 'linked_url'."""
+
+
+@dataclass
+class PaperMetadata:
+    """Rich bibliographic metadata harvested from a Zotero item.
+
+    Captures the most commonly needed fields for downstream analysis,
+    summarisation, and tagging. The ``to_dict()`` helper serialises the
+    dataclass to a JSON-friendly dict, omitting ``None`` scalars while
+    always including list fields and ``author_count``.
+    """
+
+    item_type: str | None = None
+    title: str | None = None
+    abstract_note: str | None = None
+    date: str | None = None
+    year: int | None = None
+    publication_title: str | None = None
+    journal_abbreviation: str | None = None
+    volume: str | None = None
+    issue: str | None = None
+    pages: str | None = None
+    doi: str | None = None
+    issn: str | None = None
+    isbn: str | None = None
+    url: str | None = None
+    language: str | None = None
+    publisher: str | None = None
+    place: str | None = None
+    series: str | None = None
+    series_title: str | None = None
+    short_title: str | None = None
+    rights: str | None = None
+    extra: str | None = None
+    citation_key: str | None = None
+    num_pages: str | None = None
+    author_string: str | None = None
+    zotero_uri: str | None = None
+
+    author_count: int = 0
+    """Number of authors listed on the item."""
+
+    authors: list[CreatorInfo] = field(default_factory=list)
+    """Authors extracted from the item's creator list."""
+
+    editors: list[CreatorInfo] = field(default_factory=list)
+    """Editors extracted from the item's creator list."""
+
+    tags: list[str] = field(default_factory=list)
+    """Tags already present on the Zotero item."""
+
+    attachments: list[AttachmentInfo] = field(default_factory=list)
+    """File attachments linked to this item."""
+
+    collections: list[str] | None = None
+    """Zotero collection keys the item belongs to. ``None`` when not fetched."""
+
+    def _creator_to_dict(self, creator: CreatorInfo) -> dict[str, Any]:
+        d: dict[str, Any] = {"creator_type": creator.creator_type}
+        if creator.full_name is not None:
+            d["full_name"] = creator.full_name
+        if creator.first_name is not None:
+            d["first_name"] = creator.first_name
+        if creator.last_name is not None:
+            d["last_name"] = creator.last_name
+        return d
+
+    def _attachment_to_dict(self, att: AttachmentInfo) -> dict[str, Any]:
+        d: dict[str, Any] = {"key": att.key, "filename": att.filename}
+        if att.content_type is not None:
+            d["content_type"] = att.content_type
+        if att.link_mode is not None:
+            d["link_mode"] = att.link_mode
+        return d
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to a JSON-friendly dict, omitting ``None`` scalar fields."""
+        result: dict[str, Any] = {}
+        skipped_fields = {
+            "author_count",
+            "authors",
+            "editors",
+            "tags",
+            "attachments",
+            "collections",
+        }
+        for field_info in fields(self):
+            if field_info.name in skipped_fields:
+                continue
+            val = getattr(self, field_info.name)
+            if val is not None:
+                result[field_info.name] = val
+
+        result["author_count"] = self.author_count
+        result["authors"] = [self._creator_to_dict(a) for a in self.authors]
+        result["editors"] = [self._creator_to_dict(e) for e in self.editors]
+        result["tags"] = self.tags
+        result["attachments"] = [self._attachment_to_dict(a) for a in self.attachments]
+
+        if self.collections is not None:
+            result["collections"] = self.collections
+
+        return result
+
+
+@dataclass
+class DiscoveredItem:
+    """A Zotero library item that matched a discovery/filter query."""
+
+    key: str
+    """Zotero item key."""
+
+    title: str
+    """Item title."""
+
+    tags: list[str]
+    """Tags already present on the item."""
+
+    attachments: list[AttachmentInfo]
+    """File attachments linked to this item."""
+
+    citation_key: str | None
+    """Citation key (e.g. BibTeX key), if available."""
+
+    paper_metadata: PaperMetadata
+    """Full bibliographic metadata for downstream processing."""
+
+
+@dataclass
+class DiscoveryStats:
+    """Aggregate statistics from a Zotero item discovery run."""
+
+    matched_count: int
+    """Number of items that matched the discovery criteria."""
+
+    excluded_count: int
+    """Total number of items excluded."""
+
+    excluded_by_rule: dict[str, int]
+    """Breakdown of exclusions by rule name."""
 
 
 @dataclass
@@ -65,6 +239,10 @@ class ProcessingResult:
     """Optional mapping of attachment_key to DocumentTree objects. Used for disk
     persistence of tree structures. Keys are Zotero attachment keys (unique per
     attachment) to avoid collisions. None if not collected."""
+
+    paper_metadata: PaperMetadata | None = None
+    """Optional rich bibliographic metadata harvested from the Zotero item.
+    Populated when metadata extraction is enabled. None if not collected."""
 
 
 @dataclass

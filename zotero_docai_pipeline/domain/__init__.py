@@ -13,7 +13,6 @@ from .config import (
     ProcessingConfig,
     StorageConfig,
     ZoteroConfig,
-    ZoteroTagsConfig,
     register_configs,
 )
 from .markdown_converter import MarkdownConverter, convert_markdown_to_html
@@ -25,7 +24,6 @@ from .models import (
 from .note_formatter import NoteFormatter
 
 __all__ = [
-    "ZoteroTagsConfig",
     "ZoteroConfig",
     "OCRProviderConfig",
     "MistralOCRConfig",

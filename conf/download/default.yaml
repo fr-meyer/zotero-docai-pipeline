@@ -5,10 +5,6 @@
 # Default: false for backward compatibility
 enabled: false
 
-# Zotero tag to filter items for download
-# Only items with this tag will be processed
-tag: "docai"
-
 # Local directory path where downloaded PDFs will be saved
 upload_folder: "./downloads"
 

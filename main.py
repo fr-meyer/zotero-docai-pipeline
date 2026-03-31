@@ -29,6 +29,10 @@ from zotero_docai_pipeline.domain.config import (
     RetryConfig,
     StorageConfig,
     TagAddingConfig,
+    TaggingConfig,
+    TagRuleConfig,
+    TagSelectionConfig,
+    TagTargetConfig,
     TreeStructureConfig,
     ZoteroConfig,
     register_configs,
@@ -362,6 +366,33 @@ def main(cfg: DictConfig) -> int:
         else:
             tag_adding_config = TagAddingConfig(**cfg.tag_adding)
 
+        # Construct TaggingConfig from nested DictConfig
+        include_rule = TagRuleConfig(
+            values=list(cfg.tagging.selection.include.values),
+            operator=cfg.tagging.selection.include.operator,
+        )
+        exclude_rule = TagRuleConfig(
+            values=list(cfg.tagging.selection.exclude.values),
+            operator=cfg.tagging.selection.exclude.operator,
+        )
+        selection_cfg = TagSelectionConfig(
+            include=include_rule,
+            exclude=exclude_rule,
+            conflict_resolution=cfg.tagging.selection.conflict_resolution,
+        )
+        success_target = TagTargetConfig(
+            values=list(cfg.tagging.apply_on_success.values),
+        )
+        error_target = TagTargetConfig(
+            values=list(cfg.tagging.apply_on_error.values),
+        )
+        tagging_config = TaggingConfig(
+            selection=selection_cfg,
+            apply_on_success=success_target,
+            apply_on_error=error_target,
+            include_abstract=cfg.tagging.include_abstract,
+        )
+
         app_cfg = AppConfig(
             zotero=ZoteroConfig(**cfg.zotero),
             ocr=ocr_config,
@@ -370,6 +401,7 @@ def main(cfg: DictConfig) -> int:
             tree_structure=tree_structure_config,
             download=DownloadConfig(retry=retry_config, **download_kw),
             tag_adding=tag_adding_config,
+            tagging=tagging_config,
         )
 
         # Validate flag configuration

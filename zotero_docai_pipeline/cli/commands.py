@@ -21,10 +21,30 @@ from zotero_docai_pipeline.utils.logging import (
     _format_with_emoji,
     _supports_unicode,
     log_config_summary,
+    log_discovery_stats,
     log_error_summary,
     log_summary_table,
     log_timing_summary,
 )
+
+
+def attachment_is_pdf(content_type: str | None, filename: str | None) -> bool:
+    """Return True if an attachment should be treated as a PDF."""
+    normalized_content_type = (content_type or "").lower()
+    normalized_filename = (filename or "").lower()
+    return (
+        normalized_content_type == "application/pdf"
+        or normalized_filename.endswith(".pdf")
+    )
+
+
+def count_pdf_attachments(item_attachments: list[Any]) -> int:
+    """Count PDF attachments on an item."""
+    return sum(
+        1
+        for attachment in item_attachments
+        if attachment_is_pdf(attachment.content_type, attachment.filename)
+    )
 
 
 def dry_run_command(
@@ -44,76 +64,41 @@ def dry_run_command(
         Exit code: 0 for success
     """
     logger.info("Dry-run mode enabled - previewing items without processing")
-    items = zotero_client.get_items_by_tag(
-        cfg.zotero.tags.input, cfg.zotero.tags.output
+    items, discovery_stats = zotero_client.get_items_by_selection(
+        cfg.tagging.selection, cfg.tagging.include_abstract
     )
 
-    # Count total PDFs across all items
-    total_pdfs = sum(
-        len(
-            [
-                att
-                for att in item.get("attachments", [])
-                if att.get("filename", "").lower().endswith(".pdf")
-            ]
-        )
-        for item in items
-    )
+    total_pdfs = sum(count_pdf_attachments(item.attachments) for item in items)
 
     log_config_summary(logger, len(items), cfg.ocr)
     logger.info(f"Total PDF attachments: {total_pdfs}")
 
-    # Display preview table if items exist
     if items:
         logger.info("Preview of items to be processed:")
-        # Create table header
-        if _supports_unicode():
-            logger.info(
-                "╔════════════════════════════════════════════════════════════════╗"
-            )
-            logger.info(
-                "║                    Dry-Run Preview                            ║"
-            )
-            logger.info(
-                "╠════════════════════════════════════════════════════════════════╣"
-            )
-        else:
-            logger.info("=" * 64)
-            logger.info("                    Dry-Run Preview")
-            logger.info("=" * 64)
+        unicode = _supports_unicode()
+        sep_char = "\u2500" if unicode else "-"
+        would_apply = cfg.tagging.apply_on_success.values
 
-        # Display items
-        for item in items:
-            pdf_count = len(
-                [
-                    att
-                    for att in item.get("attachments", [])
-                    if att.get("filename", "").lower().endswith(".pdf")
-                ]
+        for idx, item in enumerate(items, start=1):
+            pdf_count = count_pdf_attachments(item.attachments)
+            header = f" Item {idx}/{len(items)} "
+            logger.info(f"{sep_char * 2}{header}{sep_char * (50 - len(header))}")
+            logger.info(f"  Title       : {item.title[:60]}")
+            logger.info(f"  Citation key: {item.citation_key or '[none]'}")
+            logger.info(f"  DOI         : {item.paper_metadata.doi or '[none]'}")
+            logger.info(
+                f"  Authors     : {item.paper_metadata.author_string or '[no authors]'}"
             )
-            title = item.get("title", "Untitled")
-            if _supports_unicode():
-                logger.info(f"║ {title[:50]:<50} │ PDFs: {pdf_count:>3} ║")
-            else:
-                logger.info(f"  {title[:50]:<50} | PDFs: {pdf_count:>3}")
+            logger.info(f"  PDFs        : {pdf_count}")
+            logger.info(f"  Current tags: {', '.join(item.tags) if item.tags else '[none]'}")
+            logger.info(
+                f"  Would apply : {', '.join(would_apply) if would_apply else '[none]'}"
+            )
 
-        # Display summary
-        if _supports_unicode():
-            logger.info(
-                "╠════════════════════════════════════════════════════════════════╣"
-            )
-            logger.info(f"║ Total Items: {len(items):<47} ║")
-            logger.info(f"║ Total PDFs:  {total_pdfs:<47} ║")
-            logger.info(
-                "╚════════════════════════════════════════════════════════════════╝"
-            )
-        else:
-            logger.info("-" * 64)
-            logger.info(f"Total Items: {len(items)}")
-            logger.info(f"Total PDFs:  {total_pdfs}")
-            logger.info("=" * 64)
+        log_discovery_stats(logger, discovery_stats, total_pdfs)
     else:
         logger.info("No items found to process")
+        log_discovery_stats(logger, discovery_stats, total_pdfs)
 
     if cfg.tag_adding.enabled and cfg.tag_adding.assignments:
         assignments = cfg.tag_adding.assignments
@@ -122,7 +107,7 @@ def dry_run_command(
         matching_items = [
             item
             for item in items
-            if (item.get("citation_key") or "").strip() in configured_keys
+            if (item.citation_key or "").strip() in configured_keys
         ]
 
         logger.info("")
@@ -137,8 +122,8 @@ def dry_run_command(
                     "\u26a0\ufe0f  Replace mode: all existing tags on these items will be removed."
                 )
                 for item in matching_items:
-                    title = item.get("title", "Untitled")[:60]
-                    ckey = (item.get("citation_key") or "").strip()
+                    title = item.title[:60]
+                    ckey = (item.citation_key or "").strip()
                     assigned_tags = assignments.get(ckey, [])
                     logger.info(
                         f'  - "{title}" (citation key: {ckey})  \u2192  tags REPLACED by: {assigned_tags}'
@@ -148,8 +133,8 @@ def dry_run_command(
                 )
             else:
                 for item in matching_items:
-                    title = item.get("title", "Untitled")[:60]
-                    ckey = (item.get("citation_key") or "").strip()
+                    title = item.title[:60]
+                    ckey = (item.citation_key or "").strip()
                     assigned_tags = assignments.get(ckey, [])
                     logger.info(
                         f'  - "{title}" (citation key: {ckey})  \u2192  tags: {assigned_tags}'
@@ -161,9 +146,9 @@ def dry_run_command(
             logger.info("  No items match the configured citation key list")
 
         discovered_keys = {
-            (item.get("citation_key") or "").strip()
+            (item.citation_key or "").strip()
             for item in items
-            if (item.get("citation_key") or "").strip()
+            if (item.citation_key or "").strip()
         }
         unmatched_keys = [k for k in assignments if k not in discovered_keys]
         logger.info(f"  Unmatched assignment keys: {len(unmatched_keys)}")
@@ -419,6 +404,7 @@ def process_command(
         cfg.ocr,
         cfg.download,
         cfg.tag_adding,
+        cfg.tagging,
         tree_processor=tree_processor,
     )
     summary = pipeline.run()

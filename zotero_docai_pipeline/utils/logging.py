@@ -11,7 +11,11 @@ import sys
 from tabulate import tabulate
 
 from zotero_docai_pipeline.domain.config import OCRProviderConfig, PageIndexOCRConfig
-from zotero_docai_pipeline.domain.models import ProcessingResult, TagAddingResult
+from zotero_docai_pipeline.domain.models import (
+    DiscoveryStats,
+    ProcessingResult,
+    TagAddingResult,
+)
 
 
 def _supports_unicode() -> bool:
@@ -164,6 +168,31 @@ def log_config_summary(
 
     formatted_message = _format_with_emoji(message, "📋", "[CONFIG]")
     logger.info(formatted_message)
+
+
+def log_discovery_stats(
+    logger: logging.Logger, stats: DiscoveryStats, total_pdfs: int = 0
+) -> None:
+    """Log aggregate discovery statistics.
+
+    Args:
+        logger: Logger instance to use for logging
+        stats: DiscoveryStats from the discovery run
+        total_pdfs: Total PDF count across all matched items
+    """
+    logger.info("")
+    formatted_header = _format_with_emoji(
+        "Discovery Summary:", "\U0001f50e", "[DISCOVERY]"
+    )
+    logger.info(formatted_header)
+    logger.info(f"  Total matched : {stats.matched_count}")
+    logger.info(f"  Total excluded: {stats.excluded_count}")
+    logger.info(f"  Total PDFs    : {total_pdfs}")
+
+    if stats.excluded_by_rule:
+        for rule, count in stats.excluded_by_rule.items():
+            if count > 0:
+                logger.info(f"    {rule}: {count}")
 
 
 def log_skipped_item(logger: logging.Logger, item_title: str, reason: str) -> None:
@@ -602,7 +631,8 @@ def log_error_summary(logger: logging.Logger, results: list[ProcessingResult]) -
 
     # Log retry instructions
     logger.info("To retry failed items:")
-    logger.info("  1. Remove 'docai-error' tag from failed items in Zotero")
+    logger.info("  1. Remove the configured error tag(s) from failed items in Zotero")
+    logger.info("     (see tagging.apply_on_error.values in your tagging config)")
     logger.info("  2. Re-run the pipeline")
 
 

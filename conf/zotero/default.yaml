@@ -2,9 +2,4 @@
 library_id: ${oc.env:ZOTERO_LIBRARY_ID}
 api_key: ${oc.env:ZOTERO_API_KEY}
 
-tags:
-  input: docai
-  output: docai-processed
-  error: docai-error
-
 error_tagging_enabled: true

@@ -6,6 +6,7 @@ defaults:
   - tree_structure: default
   - download: default
   - tag_adding: default
+  - tagging: default
   - _self_
 
 # Hydra runtime configuration

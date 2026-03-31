@@ -9,6 +9,7 @@ error handling and logging for production use.
 
 import html
 import logging
+import re
 import time
 from typing import Any, cast
 from urllib.error import HTTPError, URLError
@@ -21,9 +22,16 @@ from zotero_docai_pipeline.clients.exceptions import (
     ZoteroAuthError,
     ZoteroItemNotFoundError,
 )
-from zotero_docai_pipeline.domain.config import ZoteroConfig
+from zotero_docai_pipeline.domain.config import TagSelectionConfig, ZoteroConfig
 from zotero_docai_pipeline.domain.markdown_converter import convert_markdown_to_html
-from zotero_docai_pipeline.domain.models import NotePayload
+from zotero_docai_pipeline.domain.models import (
+    AttachmentInfo,
+    CreatorInfo,
+    DiscoveredItem,
+    DiscoveryStats,
+    NotePayload,
+    PaperMetadata,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +105,196 @@ class ZoteroClient:
         self.config = config
         self._zotero = Zotero(config.library_id, "user", config.api_key)
         logger.info(f"Initialized ZoteroClient for library_id: {config.library_id}")
+
+    def _fetch_items_for_tag(self, tag: str) -> dict[str, dict[str, Any]]:
+        """Fetch all Zotero items matching a single tag.
+
+        Returns a mapping of ``item_key → item_data`` (the ``"data"`` dict
+        inside each raw API response entry).
+
+        Args:
+            tag: Zotero tag to query.
+
+        Returns:
+            Dict mapping item keys to their ``data`` dicts.
+
+        Raises:
+            ZoteroAPIError: If API communication fails.
+            ZoteroAuthError: If authentication fails.
+        """
+        try:
+            logger.debug(f"Fetching items for tag: {tag}")
+            raw_items = self._zotero.items(tag=tag)
+
+            result: dict[str, dict[str, Any]] = {}
+            for item in raw_items:
+                if not isinstance(item, dict):
+                    continue
+                item_data = item.get("data")
+                if not isinstance(item_data, dict):
+                    continue
+                item_key = item.get("key")
+                if item_key:
+                    result[item_key] = item_data
+
+            logger.debug(f"Fetched {len(result)} items for tag '{tag}'")
+            return result
+
+        except HTTPError as e:
+            if e.code in (401, 403):
+                error_msg = (
+                    f"Authentication failed while fetching items with tag '{tag}'"
+                )
+                logger.error(f"{error_msg}: {e}")
+                raise ZoteroAuthError(error_msg, e) from e
+            else:
+                error_msg = (
+                    f"API error while fetching items with tag '{tag}': HTTP {e.code}"
+                )
+                logger.error(f"{error_msg}: {e}")
+                raise ZoteroAPIError(error_msg, e) from e
+        except URLError as e:
+            error_msg = f"Network error while fetching items with tag '{tag}'"
+            logger.error(f"{error_msg}: {e}")
+            raise ZoteroAPIError(error_msg, e) from e
+        except Exception as e:
+            error_msg = f"Unexpected error while fetching items with tag '{tag}'"
+            logger.error(f"{error_msg}: {e}", exc_info=True)
+            raise ZoteroAPIError(error_msg, e) from e
+
+    def _extract_paper_metadata(
+        self,
+        item_data: dict[str, Any],
+        include_abstract: bool,
+        item_key: str | None = None,
+    ) -> PaperMetadata:
+        """Build a :class:`PaperMetadata` from a Zotero item ``data`` dict.
+
+        This method never raises — on any unexpected error it logs a warning
+        and returns a minimal :class:`PaperMetadata` instance.
+
+        Args:
+            item_data: The ``"data"`` dict from a Zotero API item response.
+            include_abstract: Whether to populate ``abstract_note``.
+            item_key: Optional Zotero item key, used to construct ``zotero_uri``.
+
+        Returns:
+            Fully populated :class:`PaperMetadata`.
+        """
+        try:
+            # --- scalar fields ---
+            item_type = item_data.get("itemType")
+            title = item_data.get("title")
+            short_title = item_data.get("shortTitle")
+            doi = item_data.get("DOI")
+            url = item_data.get("url")
+            date = item_data.get("date")
+            publication_title = item_data.get("publicationTitle")
+            journal_abbreviation = item_data.get("journalAbbreviation")
+            volume = item_data.get("volume")
+            issue = item_data.get("issue")
+            pages = item_data.get("pages")
+            language = item_data.get("language")
+            publisher = item_data.get("publisher")
+            abstract_note = item_data.get("abstractNote") if include_abstract else None
+            citation_key = ZoteroClient._extract_citation_key(item_data)
+
+            # --- year parsing (best-effort) ---
+            year: int | None = None
+            date_str = item_data.get("date", "")
+            if isinstance(date_str, str) and date_str:
+                match = re.search(r"\b(\d{4})\b", date_str)
+                if match:
+                    try:
+                        year = int(match.group(1))
+                    except (ValueError, TypeError):
+                        year = None
+
+            # --- tags ---
+            raw_tags = item_data.get("tags", [])
+            tags = [t.get("tag", "") for t in raw_tags if isinstance(t, dict)]
+            tags = [t for t in tags if t]
+
+            # --- collections ---
+            raw_collections = item_data.get("collections")
+            collections = raw_collections if isinstance(raw_collections, list) else None
+
+            # --- creators ---
+            authors: list[CreatorInfo] = []
+            editors: list[CreatorInfo] = []
+            for creator in item_data.get("creators", []):
+                if not isinstance(creator, dict):
+                    continue
+                creator_type = creator.get("creatorType", "")
+                info = CreatorInfo(
+                    creator_type=creator_type,
+                    full_name=creator.get("name"),
+                    first_name=creator.get("firstName"),
+                    last_name=creator.get("lastName"),
+                )
+                if creator_type == "author":
+                    authors.append(info)
+                elif creator_type == "editor":
+                    editors.append(info)
+
+            # --- author_string ---
+            def _display_name(c: CreatorInfo) -> str:
+                if c.last_name:
+                    return c.last_name
+                if c.full_name:
+                    return c.full_name
+                if c.first_name:
+                    return c.first_name
+                return "Unknown"
+
+            author_string: str | None = None
+            if len(authors) == 1:
+                author_string = _display_name(authors[0])
+            elif len(authors) == 2:
+                author_string = f"{_display_name(authors[0])} and {_display_name(authors[1])}"
+            elif len(authors) >= 3:
+                names = [_display_name(a) for a in authors]
+                author_string = ", ".join(names[:-1]) + ", and " + names[-1]
+
+            # --- zotero_uri ---
+            zotero_uri: str | None = None
+            if item_key and self.config.library_id:
+                zotero_uri = (
+                    f"https://www.zotero.org/users/"
+                    f"{self.config.library_id}/items/{item_key}"
+                )
+
+            return PaperMetadata(
+                item_type=item_type,
+                title=title,
+                short_title=short_title,
+                doi=doi,
+                url=url,
+                date=date,
+                year=year,
+                publication_title=publication_title,
+                journal_abbreviation=journal_abbreviation,
+                volume=volume,
+                issue=issue,
+                pages=pages,
+                language=language,
+                publisher=publisher,
+                abstract_note=abstract_note,
+                citation_key=citation_key,
+                tags=tags,
+                collections=collections,
+                authors=authors,
+                editors=editors,
+                author_count=len(authors),
+                author_string=author_string,
+                zotero_uri=zotero_uri,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to extract paper metadata for item_key={item_key}: {e}",
+                exc_info=True,
+            )
+            return PaperMetadata()
 
     def get_items_by_tag(
         self, tag: str, exclude_tag: str | None = None
@@ -228,6 +426,168 @@ class ZoteroClient:
             error_msg = f"Unexpected error while fetching items with tag '{tag}'"
             logger.error(f"{error_msg}: {e}", exc_info=True)
             raise ZoteroAPIError(error_msg, e) from e
+
+    def get_items_by_selection(
+        self,
+        selection_cfg: TagSelectionConfig,
+        include_abstract: bool,
+    ) -> tuple[list[DiscoveredItem], DiscoveryStats]:
+        """Discover Zotero items using structured tag selection rules.
+
+        Fetches items matching the ``include`` rule, applies the ``exclude``
+        rule and ``conflict_resolution`` policy, enriches each surviving item
+        with PDF attachment info and full :class:`PaperMetadata`, and returns
+        both the enriched list and aggregate discovery statistics.
+
+        Args:
+            selection_cfg: Tag selection rules (include/exclude/conflict).
+            include_abstract: Whether to populate ``PaperMetadata.abstract_note``.
+
+        Returns:
+            A 2-tuple of ``(discovered_items, stats)``.
+
+        Raises:
+            ZoteroAPIError: If any Zotero API call fails.
+            ZoteroAuthError: If authentication fails.
+        """
+        # ------------------------------------------------------------------
+        # 1. Per-tag fetch (fail-fast)
+        # ------------------------------------------------------------------
+        per_tag_results: list[dict[str, dict[str, Any]]] = []
+        for tag in selection_cfg.include.values:
+            per_tag_results.append(self._fetch_items_for_tag(tag))
+
+        # ------------------------------------------------------------------
+        # 2. Set operation (union / intersection)
+        # ------------------------------------------------------------------
+        candidate_map: dict[str, dict[str, Any]] = {}
+        if selection_cfg.include.operator == "or":
+            for tag_result in per_tag_results:
+                candidate_map.update(tag_result)
+        else:  # "and"
+            if per_tag_results:
+                common_keys = set(per_tag_results[0].keys())
+                for tag_result in per_tag_results[1:]:
+                    common_keys &= set(tag_result.keys())
+                for key in common_keys:
+                    for tag_result in per_tag_results:
+                        if key in tag_result:
+                            candidate_map[key] = tag_result[key]
+                            break
+
+        logger.info(
+            f"Tag selection: {len(selection_cfg.include.values)} include tag(s) "
+            f"(operator={selection_cfg.include.operator!r}), "
+            f"{len(candidate_map)} candidate(s) before exclusion"
+        )
+
+        # ------------------------------------------------------------------
+        # 3. Exclude rule evaluation
+        # ------------------------------------------------------------------
+        excluded_keys: set[str] = set()
+        excluded_by_rule: dict[str, int] = {
+            "exclude_rule": 0,
+            "conflict_resolution_include_wins": 0,
+        }
+        exclude_values = selection_cfg.exclude.values
+
+        if exclude_values:
+            for item_key, item_data in candidate_map.items():
+                item_tags = {
+                    t.get("tag", "")
+                    for t in item_data.get("tags", [])
+                    if isinstance(t, dict)
+                }
+
+                if selection_cfg.exclude.operator == "or":
+                    matches_exclude = bool(item_tags & set(exclude_values))
+                else:  # "and"
+                    matches_exclude = set(exclude_values).issubset(item_tags)
+
+                if matches_exclude:
+                    if selection_cfg.conflict_resolution == "exclude_wins":
+                        excluded_keys.add(item_key)
+                        excluded_by_rule["exclude_rule"] += 1
+                    else:  # include_wins
+                        excluded_by_rule["conflict_resolution_include_wins"] += 1
+
+        final_keys = set(candidate_map.keys()) - excluded_keys
+
+        logger.info(
+            f"After exclusion: {len(excluded_keys)} excluded, "
+            f"{len(final_keys)} remaining "
+            f"(conflict_resolution={selection_cfg.conflict_resolution!r})"
+        )
+
+        # ------------------------------------------------------------------
+        # 4. Enrichment
+        # ------------------------------------------------------------------
+        discovered_items: list[DiscoveredItem] = []
+        for item_key in final_keys:
+            item_data = candidate_map[item_key]
+
+            # Fetch PDF children
+            attachments: list[AttachmentInfo] = []
+            try:
+                children = self._zotero.children(item_key)
+                for child in children:
+                    if not isinstance(child, dict):
+                        continue
+                    child_data = child.get("data")
+                    if not isinstance(child_data, dict):
+                        continue
+                    if child_data.get("contentType") == "application/pdf":
+                        attachments.append(
+                            AttachmentInfo(
+                                key=child.get("key", ""),
+                                filename=child_data.get("filename", "unknown.pdf"),
+                                content_type=child_data.get("contentType"),
+                                link_mode=child_data.get("linkMode"),
+                            )
+                        )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to fetch children for item {item_key}: {e}"
+                )
+
+            paper_metadata = self._extract_paper_metadata(
+                item_data, include_abstract, item_key=item_key,
+            )
+            paper_metadata.attachments = list(attachments)
+
+            item_tags = [
+                t.get("tag", "")
+                for t in item_data.get("tags", [])
+                if isinstance(t, dict)
+            ]
+            item_tags = [t for t in item_tags if t]
+
+            discovered_items.append(
+                DiscoveredItem(
+                    key=item_key,
+                    title=item_data.get("title", "Untitled"),
+                    tags=item_tags,
+                    attachments=attachments,
+                    citation_key=paper_metadata.citation_key,
+                    paper_metadata=paper_metadata,
+                )
+            )
+
+        # ------------------------------------------------------------------
+        # 5. Stats
+        # ------------------------------------------------------------------
+        stats = DiscoveryStats(
+            matched_count=len(discovered_items),
+            excluded_count=len(excluded_keys),
+            excluded_by_rule=excluded_by_rule,
+        )
+
+        logger.info(
+            f"Discovery complete: {stats.matched_count} matched, "
+            f"{stats.excluded_count} excluded"
+        )
+
+        return discovered_items, stats
 
     def download_pdf(self, item_key: str, attachment_key: str) -> bytes:
         """Download a PDF attachment from Zotero.

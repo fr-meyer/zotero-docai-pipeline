@@ -5,4 +5,4 @@ Automate PDF-to-Markdown extraction for Zotero attachments using Mistral Documen
 and save results as Zotero notes for Notero/Notion sync.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

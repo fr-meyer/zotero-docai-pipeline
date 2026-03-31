@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Configuration dataclasses for the Zotero Document AI Pipeline.
 
@@ -8,6 +10,7 @@ support for configuration values.
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Literal
 
 from hydra.core.config_store import ConfigStore
 
@@ -19,6 +22,116 @@ class ConfigError(Exception):
     dedicated exception type makes it easier to distinguish configuration
     problems from other runtime errors.
     """
+
+
+@dataclass
+class TagRuleConfig:
+    """Configuration for a single tag-matching rule."""
+
+    values: list[str] = field(default_factory=list)
+    """Tag values to match against."""
+
+    operator: Literal["and", "or"] = "or"
+    """Logical operator for combining tag matches."""
+
+
+@dataclass
+class TagSelectionConfig:
+    """Configuration for selecting items by tag inclusion/exclusion rules."""
+
+    include: TagRuleConfig = field(
+        default_factory=lambda: TagRuleConfig(values=["docai"])
+    )
+    """Rule for tags that must be present on an item."""
+
+    exclude: TagRuleConfig = field(default_factory=TagRuleConfig)
+    """Rule for tags that must not be present on an item."""
+
+    conflict_resolution: Literal["exclude_wins", "include_wins"] = "exclude_wins"
+    """How to resolve when an item matches both include and exclude rules."""
+
+
+@dataclass
+class TagTargetConfig:
+    """Configuration for tags to apply to items after processing."""
+
+    values: list[str] = field(default_factory=list)
+    """Tag values to apply."""
+
+    mode: Literal["append_all"] = "append_all"
+    """How to apply tags to items."""
+
+
+@dataclass
+class TaggingConfig:
+    """Configuration for the tag-based item selection and post-processing workflow."""
+
+    selection: TagSelectionConfig = field(default_factory=TagSelectionConfig)
+    """Rules for selecting items to process based on tags."""
+
+    apply_on_success: TagTargetConfig = field(default_factory=TagTargetConfig)
+    """Tags to apply to items after successful processing."""
+
+    apply_on_error: TagTargetConfig = field(default_factory=TagTargetConfig)
+    """Tags to apply to items after failed processing."""
+
+    include_abstract: bool = False
+    """Whether to include the item abstract in processing."""
+
+    def __post_init__(self) -> None:
+        """Validate and normalize tagging configuration."""
+        if not self.selection.include.values:
+            raise ConfigError(
+                "tagging.selection.include.values cannot be empty"
+            )
+
+        if self.selection.include.operator not in {"and", "or"}:
+            raise ConfigError(
+                f"tagging.selection.include.operator must be 'and' or 'or', "
+                f"got {self.selection.include.operator!r}"
+            )
+        if self.selection.exclude.operator not in {"and", "or"}:
+            raise ConfigError(
+                f"tagging.selection.exclude.operator must be 'and' or 'or', "
+                f"got {self.selection.exclude.operator!r}"
+            )
+
+        if self.selection.conflict_resolution not in {"exclude_wins", "include_wins"}:
+            raise ConfigError(
+                f"tagging.selection.conflict_resolution must be "
+                f"'exclude_wins' or 'include_wins', "
+                f"got {self.selection.conflict_resolution!r}"
+            )
+
+        for v in self.selection.include.values:
+            if not v.strip():
+                raise ConfigError(
+                    f"tagging.selection.include.values contains a "
+                    f"whitespace-only or empty tag: {v!r}"
+                )
+        for v in self.selection.exclude.values:
+            if not v.strip():
+                raise ConfigError(
+                    f"tagging.selection.exclude.values contains a "
+                    f"whitespace-only or empty tag: {v!r}"
+                )
+
+        self.selection.include.values = _strip_dedup(self.selection.include.values)
+        self.selection.exclude.values = _strip_dedup(self.selection.exclude.values)
+        self.apply_on_success.values = _strip_dedup(self.apply_on_success.values)
+        self.apply_on_error.values = _strip_dedup(self.apply_on_error.values)
+
+
+def _strip_dedup(values: list[str]) -> list[str]:
+    """Strip whitespace and deduplicate a list of strings, preserving order."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for v in values:
+        stripped = v.strip()
+        if stripped and stripped not in seen:
+            seen.add(stripped)
+            result.append(stripped)
+    return result
 
 
 @dataclass
@@ -604,6 +717,9 @@ class AppConfig:
     tag_adding: TagAddingConfig = field(default_factory=TagAddingConfig)
     """Tag Adding feature configuration."""
 
+    tagging: TaggingConfig = field(default_factory=TaggingConfig)
+    """Tag-based item selection and post-processing workflow configuration."""
+
 
 def register_configs() -> None:
     """Register structured configs with Hydra.
@@ -627,6 +743,7 @@ def register_configs() -> None:
     cs.store(group="tree_structure", name="default", node=TreeStructureConfig)
     cs.store(group="download", name="default", node=DownloadConfig)
     cs.store(group="tag_adding", name="default", node=TagAddingConfig)
+    cs.store(group="tagging", name="default", node=TaggingConfig)
 
     # Register top-level config
     cs.store(name="config", node=AppConfig)

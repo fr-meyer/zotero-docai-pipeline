@@ -520,7 +520,10 @@ class ZoteroClient:
                     else:  # include_wins
                         kept_by_conflict_include_wins += 1
 
-        final_keys = set(candidate_map.keys()) - excluded_keys
+        final_keys = [
+            item_key for item_key in candidate_map.keys()
+            if item_key not in excluded_keys
+        ]
 
         logger.info(
             f"After exclusion: {len(excluded_keys)} excluded, "
@@ -562,12 +565,41 @@ class ZoteroClient:
                                 link_mode=child_data.get("linkMode"),
                             )
                         )
+            except HTTPError as e:
+                logger.warning(
+                    f"Failed to fetch children for item {item_key}: {e}",
+                    exc_info=True,
+                )
+                if e.code in (401, 403):
+                    error_msg = (
+                        f"Authentication failed while fetching children for item "
+                        f"'{item_key}'"
+                    )
+                    raise ZoteroAuthError(error_msg, e) from e
+
+                error_msg = (
+                    f"API error while fetching children for item '{item_key}': "
+                    f"HTTP {e.code}"
+                )
+                raise ZoteroAPIError(error_msg, e) from e
+            except URLError as e:
+                logger.warning(
+                    f"Failed to fetch children for item {item_key}: {e}",
+                    exc_info=True,
+                )
+                error_msg = (
+                    f"Network error while fetching children for item '{item_key}'"
+                )
+                raise ZoteroAPIError(error_msg, e) from e
             except Exception as e:
                 logger.warning(
                     f"Failed to fetch children for item {item_key}: {e}",
                     exc_info=True,
                 )
-                raise
+                error_msg = (
+                    f"Unexpected error while fetching children for item '{item_key}'"
+                )
+                raise ZoteroAPIError(error_msg, e) from e
 
             paper_metadata = self._extract_paper_metadata(
                 item_data, include_abstract, item_key=item_key,

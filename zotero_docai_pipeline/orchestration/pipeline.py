@@ -647,6 +647,9 @@ class Pipeline:
             pdf_attachments = [
                 att for att in item.attachments if self._is_pdf_attachment(att)
             ]
+            if not pdf_attachments:
+                failed_item_keys.add(item.key)
+                continue
 
             all_succeeded = True
             for attachment in pdf_attachments:
@@ -672,6 +675,10 @@ class Pipeline:
                         att for att in item.attachments
                         if self._is_pdf_attachment(att)
                     ]
+                    if not pdf_attachments:
+                        self._apply_processing_tags(item.key, success=False)
+                        error_tagged_count += 1
+                        continue
                     all_attachments_succeeded = True
                     for attachment in pdf_attachments:
                         mapping_key = f"{item.key}:::{attachment.key}"
@@ -689,8 +696,8 @@ class Pipeline:
                             if self._is_pdf_attachment(att)
                         ]
                         if len(pdf_attachments) == 0:
-                            self._apply_processing_tags(item.key, success=True)
-                            processed_tagged_count += 1
+                            self._apply_processing_tags(item.key, success=False)
+                            error_tagged_count += 1
             except ZoteroClientError as e:
                 self.logger.warning(f"Failed to tag item {item.key}: {e}")
 

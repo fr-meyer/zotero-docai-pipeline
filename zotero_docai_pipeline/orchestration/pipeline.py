@@ -252,7 +252,7 @@ class Pipeline:
                 f"Failed to create or write to upload folder '{upload_folder}': {e}"
             ) from e
 
-    def _apply_processing_tags(self, item_key: str, success: bool) -> None:
+    def _apply_processing_tags(self, item_key: str, success: bool) -> bool:
         """Apply post-processing tags to an item based on success/failure.
 
         On success, applies all tags from ``tagging_config.apply_on_success``.
@@ -265,22 +265,34 @@ class Pipeline:
         Args:
             item_key: Zotero item key to tag.
             success: Whether the item was processed successfully.
+
+        Returns:
+            True when at least one intended tag was applied and every tag
+            addition succeeded, otherwise False.
         """
         if success:
             tags = self.tagging_config.apply_on_success.values
         else:
             if not self.zotero_config.error_tagging_enabled:
-                return
+                return False
             tags = self.tagging_config.apply_on_error.values
+
+        if not tags:
+            return False
+
+        all_succeeded = True
 
         for tag in tags:
             try:
                 self.zotero_client.add_tag(item_key, tag)
                 self.logger.debug(f"Applied tag '{tag}' to item {item_key}")
             except ZoteroClientError as e:
+                all_succeeded = False
                 self.logger.warning(
                     f"Failed to apply tag '{tag}' to item {item_key}: {e}"
                 )
+
+        return all_succeeded
 
     @staticmethod
     def _sanitize_filename(filename: str) -> str:
@@ -668,16 +680,16 @@ class Pipeline:
         for item in items:
             try:
                 if item.key in failed_item_keys:
-                    self._apply_processing_tags(item.key, success=False)
-                    error_tagged_count += 1
+                    if self._apply_processing_tags(item.key, success=False):
+                        error_tagged_count += 1
                 elif item.key in success_item_keys:
                     pdf_attachments = [
                         att for att in item.attachments
                         if self._is_pdf_attachment(att)
                     ]
                     if not pdf_attachments:
-                        self._apply_processing_tags(item.key, success=False)
-                        error_tagged_count += 1
+                        if self._apply_processing_tags(item.key, success=False):
+                            error_tagged_count += 1
                         continue
                     all_attachments_succeeded = True
                     for attachment in pdf_attachments:
@@ -687,8 +699,8 @@ class Pipeline:
                             break
 
                     if all_attachments_succeeded and apply_processed_tag:
-                        self._apply_processing_tags(item.key, success=True)
-                        processed_tagged_count += 1
+                        if self._apply_processing_tags(item.key, success=True):
+                            processed_tagged_count += 1
                 else:
                     if apply_processed_tag:
                         pdf_attachments = [
@@ -696,8 +708,8 @@ class Pipeline:
                             if self._is_pdf_attachment(att)
                         ]
                         if len(pdf_attachments) == 0:
-                            self._apply_processing_tags(item.key, success=False)
-                            error_tagged_count += 1
+                            if self._apply_processing_tags(item.key, success=False):
+                                error_tagged_count += 1
             except ZoteroClientError as e:
                 self.logger.warning(f"Failed to tag item {item.key}: {e}")
 
@@ -829,8 +841,8 @@ class Pipeline:
             if item_matched and not item_succeeded:
                 self._apply_processing_tags(item.key, success=False)
             else:
-                self._apply_processing_tags(item.key, success=True)
-                processed_count += 1
+                if self._apply_processing_tags(item.key, success=True):
+                    processed_count += 1
 
         return processed_count
 
@@ -1927,7 +1939,6 @@ class Pipeline:
                     att for att in item.attachments if self._is_pdf_attachment(att)
                 ]
                 if not pdf_attachments:
-                    download_succeeded_items.append(item)
                     continue
                 all_succeeded = True
                 for att in pdf_attachments:
@@ -2262,8 +2273,8 @@ class Pipeline:
                     if item_matched and not item_succeeded:
                         self._apply_processing_tags(item.key, success=False)
                     else:
-                        self._apply_processing_tags(item.key, success=True)
-                        tag_adding_processed += 1
+                        if self._apply_processing_tags(item.key, success=True):
+                            tag_adding_processed += 1
                 else:
                     self._apply_processing_tags(item.key, success=True)
 

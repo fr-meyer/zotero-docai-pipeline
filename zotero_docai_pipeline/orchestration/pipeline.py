@@ -213,7 +213,12 @@ class Pipeline:
             ZoteroClientError: If item discovery fails (re-raised after logging).
         """
         try:
-            input_tag = self.download_config.tag or self.zotero_config.tags.input
+            download_tag = self.download_config.tag
+            default_download_tag = DownloadConfig.tag
+            if download_tag is None or download_tag == default_download_tag:
+                input_tag = self.zotero_config.tags.input
+            else:
+                input_tag = download_tag
             exclude_tag = self.zotero_config.tags.output
 
             # Get all items with input tag (including those with output tag)
@@ -1758,8 +1763,11 @@ class Pipeline:
             self.logger.info(
                 "Standalone tag-adding mode: OCR and download disabled"
             )
+            total_assigned_tags = sum(
+                len(tags) for tags in self.tag_adding_config.assignments.values()
+            )
             log_tag_adding_start(
-                self.logger, len(items), len(self.tag_adding_config.assignments)
+                self.logger, len(items), total_assigned_tags
             )
             tag_adding_results, no_key_count = self._apply_tag_adding(items)
 
@@ -1911,10 +1919,13 @@ class Pipeline:
 
             if self.tag_adding_config.enabled:
                 tag_adding_eligible = len(download_succeeded_items)
+                total_assigned_tags = sum(
+                    len(tags) for tags in self.tag_adding_config.assignments.values()
+                )
                 log_tag_adding_start(
                     self.logger,
                     tag_adding_eligible,
-                    len(self.tag_adding_config.assignments),
+                    total_assigned_tags,
                 )
                 tag_adding_results, no_key_count = self._apply_tag_adding(download_succeeded_items)
 

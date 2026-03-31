@@ -6,6 +6,7 @@ These schemas are registered with Hydra to enable validation and IDE autocomplet
 support for configuration values.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from hydra.core.config_store import ConfigStore
@@ -341,7 +342,7 @@ class TagAddingConfig:
                 "enabled. Provide at least one citation_key → tags mapping."
             )
 
-        if not isinstance(self.assignments, dict):
+        if not isinstance(self.assignments, Mapping):
             raise ConfigError(
                 "tag_adding.assignments must be a mapping of citation_key → "
                 f"list[str], got {type(self.assignments).__name__!r}"
@@ -350,6 +351,11 @@ class TagAddingConfig:
         # 2. Key collision check (includes empty-key guard)
         seen_keys: dict[str, str] = {}
         for raw_key in self.assignments:
+            if not isinstance(raw_key, str):
+                raise ConfigError(
+                    "tag_adding.assignments keys must be strings, got "
+                    f"{type(raw_key).__name__!r} (value: {raw_key!r})"
+                )
             normalized_key = raw_key.strip()
             if not normalized_key:
                 raise ConfigError(
@@ -388,6 +394,11 @@ class TagAddingConfig:
         # 5. Per-item normalization + rebuild
         rebuilt: dict[str, list[str]] = {}
         for citation_key, value in self.assignments.items():
+            if not isinstance(citation_key, str):
+                raise ConfigError(
+                    "tag_adding.assignments keys must be strings, got "
+                    f"{type(citation_key).__name__!r} (value: {citation_key!r})"
+                )
             seen: set[str] = set()
             normalized: list[str] = []
             for t in value:

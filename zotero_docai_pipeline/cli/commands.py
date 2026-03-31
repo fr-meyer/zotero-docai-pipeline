@@ -50,7 +50,7 @@ def dry_run_command(
     )
 
     total_pdfs = sum(
-        len([a for a in item.attachments if a.filename.lower().endswith(".pdf")])
+        len([a for a in item.attachments if a.content_type == "application/pdf" or a.filename.lower().endswith(".pdf")])
         for item in items
     )
 
@@ -65,7 +65,7 @@ def dry_run_command(
 
         for idx, item in enumerate(items, start=1):
             pdf_count = len(
-                [a for a in item.attachments if a.filename.lower().endswith(".pdf")]
+                [a for a in item.attachments if a.content_type == "application/pdf" or a.filename.lower().endswith(".pdf")]
             )
             header = f" Item {idx}/{len(items)} "
             logger.info(f"{sep_char * 2}{header}{sep_char * (50 - len(header))}")

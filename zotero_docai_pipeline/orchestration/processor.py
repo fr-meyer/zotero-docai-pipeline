@@ -208,8 +208,8 @@ class ItemProcessor:
                 continue
 
             # Filter non-PDF attachments
-            if not filename.lower().endswith(".pdf"):
-                self.logger.debug(f"Skipping non-PDF attachment: {filename}")
+            if attachment.content_type != "application/pdf" and not filename.lower().endswith(".pdf"):
+                self.logger.debug(f"Skipping non-PDF attachment (no pdf content_type or .pdf suffix): {filename}")
                 continue
 
             try:

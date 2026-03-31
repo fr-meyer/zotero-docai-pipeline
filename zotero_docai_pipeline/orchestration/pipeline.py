@@ -193,9 +193,11 @@ class Pipeline:
     def _discover_items(self) -> tuple[list[dict[str, Any]], int]:
         """Discover items to process using tag-based filtering.
 
-        Retrieves items that have the input tag but don't have the output tag.
-        This implements the tag-based workflow where items are marked for processing
-        with the input tag and excluded from reprocessing with the output tag.
+        Retrieves items that have the configured discovery tag but don't have the
+        output tag. Discovery prefers ``download.tag`` and falls back to
+        ``zotero.tags.input`` for backward compatibility. This implements the
+        tag-based workflow where items are marked for processing with the input tag
+        and excluded from reprocessing with the output tag.
 
         Returns:
             Tuple containing:
@@ -211,7 +213,7 @@ class Pipeline:
             ZoteroClientError: If item discovery fails (re-raised after logging).
         """
         try:
-            input_tag = self.zotero_config.tags.input
+            input_tag = self.download_config.tag or self.zotero_config.tags.input
             exclude_tag = self.zotero_config.tags.output
 
             # Get all items with input tag (including those with output tag)
@@ -2220,10 +2222,12 @@ class Pipeline:
                     if item_tag_results:
                         tag_adding_results_ocr.append(item_tag_results[0])
 
-                    # Step B: apply output tag only if item matched and all tags succeeded
+                    # Step B: apply output tag if item matched and all tags succeeded,
+                    # or if OCR succeeded with no assignment match.
                     item_matched = bool(item_tag_results)
                     item_succeeded = item_matched and not item_tag_results[0].tags_failed
-                    if item_succeeded:
+                    should_add_output_tag = item_succeeded or not item_matched
+                    if should_add_output_tag:
                         try:
                             self.zotero_client.add_tag(
                                 item["key"], self.zotero_config.tags.output
@@ -2234,16 +2238,18 @@ class Pipeline:
                             self.logger.warning(
                                 f"Failed to add output tag to item {item['key']}: {e}"
                             )
-                            item_tag_results[0].tags_failed.append(
-                                self.zotero_config.tags.output
-                            )
+                            if item_tag_results:
+                                item_tag_results[0].tags_failed.append(
+                                    self.zotero_config.tags.output
+                                )
                         except Exception as e:
                             self.logger.warning(
                                 f"Unexpected error adding output tag to item {item['key']}: {e}"
                             )
-                            item_tag_results[0].tags_failed.append(
-                                self.zotero_config.tags.output
-                            )
+                            if item_tag_results:
+                                item_tag_results[0].tags_failed.append(
+                                    self.zotero_config.tags.output
+                                )
                 else:
                     # Tag adding disabled — unconditional output tag (existing behavior)
                     try:

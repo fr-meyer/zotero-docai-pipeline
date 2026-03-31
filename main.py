@@ -322,23 +322,41 @@ def main(cfg: DictConfig) -> int:
         # TagAddingConfig is constructed with non-empty assignments.
         env_assignments = os.getenv("TAG_ADDING_ASSIGNMENTS_JSON")
         if env_assignments:
-            parsed_assignments = json.loads(env_assignments)
-            if isinstance(parsed_assignments, dict):
-                extra_fields = {
-                    k: v
-                    for k, v in cfg.tag_adding.items()
-                    if k not in ("enabled", "assignments")
-                }
-                tag_adding_config = TagAddingConfig(
-                    enabled=True,
-                    assignments=parsed_assignments,
-                    **extra_fields,
-                )
-            else:
+            try:
+                parsed_assignments = json.loads(env_assignments)
+                if isinstance(parsed_assignments, dict):
+                    extra_fields = {
+                        k: v
+                        for k, v in cfg.tag_adding.items()
+                        if k not in ("enabled", "assignments")
+                    }
+                    tag_adding_config = TagAddingConfig(
+                        enabled=True,
+                        assignments=parsed_assignments,
+                        **extra_fields,
+                    )
+                else:
+                    logger.error(
+                        "TAG_ADDING_ASSIGNMENTS_JSON must decode to a dict, "
+                        "got %s; falling back to config tag_adding.",
+                        type(parsed_assignments).__name__,
+                    )
+                    tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+            except (ValueError, json.JSONDecodeError) as e:
                 logger.error(
-                    "TAG_ADDING_ASSIGNMENTS_JSON must decode to a dict, "
-                    "got %s; falling back to config tag_adding.",
-                    type(parsed_assignments).__name__,
+                    "Failed to parse TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; "
+                    "falling back to config tag_adding.",
+                    env_assignments,
+                    e,
+                )
+                tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+            except Exception as e:
+                logger.error(
+                    "Failed to build TagAddingConfig from "
+                    "TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; falling back to config "
+                    "tag_adding.",
+                    env_assignments,
+                    e,
                 )
                 tag_adding_config = TagAddingConfig(**cfg.tag_adding)
         else:

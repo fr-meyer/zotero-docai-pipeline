@@ -95,7 +95,7 @@ The pipeline uses Hydra for configuration management. Most settings can be overr
 | `tree_structure.enabled` | boolean | `true` | Enable hierarchical tree structure extraction |
 | `processing.extraction_mode` | string | `all_at_once` | Note organization mode (`all_at_once` or `page_by_page`) |
 | `processing.batch_size` | integer | varies | Batch processing size (provider-dependent) |
-| `download.tag` | string | `docai` | Zotero tag used to select items for download/tagging |
+| `download.tag` | string | `docai` | Primary Zotero tag used by `Pipeline._discover_items()` to select items for download/tagging; falls back to `zotero.tags.input` if unset |
 | `download.upload_folder` | string | `./downloads` | Local directory for downloaded PDFs |
 | `download.max_concurrent_downloads` | integer | `5` | Maximum number of concurrent downloads |
 | `processing.cleanup_uploaded_files` | boolean | `false` | Controls file deletion after processing (default: false = keep files) |
@@ -160,7 +160,8 @@ Optional step that downloads PDFs from Zotero items to local disk (used as an in
 
 ### Key configuration
 - `download.enabled`: set to `true` to enable PDF downloads.
-- `download.tag`: Zotero tag that selects items for downloading (default: `docai`).
+- `download.tag`: primary Zotero tag that `Pipeline._discover_items()` uses to select items for downloading and processing (default: `docai`).
+- `zotero.tags.input`: backward-compatible fallback tag used by `Pipeline._discover_items()` when `download.tag` is absent.
 - `download.upload_folder`: local directory for downloaded PDFs (default: `./downloads`).
 - `download.preserve_filenames`: whether to preserve the original PDF filenames (default: `true`).
 - `download.create_subfolders`: whether to create subfolders under `upload_folder` (default: `false`).

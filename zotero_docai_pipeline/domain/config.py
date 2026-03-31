@@ -341,6 +341,12 @@ class TagAddingConfig:
                 "enabled. Provide at least one citation_key → tags mapping."
             )
 
+        if not isinstance(self.assignments, dict):
+            raise ConfigError(
+                "tag_adding.assignments must be a mapping of citation_key → "
+                f"list[str], got {type(self.assignments).__name__!r}"
+            )
+
         # 2. Key collision check (includes empty-key guard)
         seen_keys: dict[str, str] = {}
         for raw_key in self.assignments:

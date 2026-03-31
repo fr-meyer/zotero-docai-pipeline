@@ -11,7 +11,7 @@ import sys
 from tabulate import tabulate
 
 from zotero_docai_pipeline.domain.config import OCRProviderConfig, PageIndexOCRConfig
-from zotero_docai_pipeline.domain.models import ProcessingResult
+from zotero_docai_pipeline.domain.models import ProcessingResult, TagAddingResult
 
 
 def _supports_unicode() -> bool:
@@ -621,15 +621,15 @@ def log_tag_adding_start(
     logger.info(formatted_message)
 
 
-def log_tag_adding_result(logger: logging.Logger, result: "TagAddingResult") -> None:
+def log_tag_adding_result(
+    logger: logging.Logger, result: TagAddingResult
+) -> None:
     """Log the result of a tag adding operation for a single item.
 
     Args:
         logger: Logger instance to use for logging
         result: TagAddingResult object with outcome details
     """
-    from zotero_docai_pipeline.domain.models import TagAddingResult  # noqa: F811
-
     if result.tags_failed:
         message = (
             f"Tag Adding failed for \"{result.item_title}\" ({result.item_key}): "

@@ -1,0 +1,28 @@
+# Mistral AI OCR configuration
+# This file defines default values for MistralOCRConfig
+# Values can be overridden via command line or config overrides
+
+# Whether OCR processing is enabled. When false, only PDF download will occur.
+enabled: false
+
+# API configuration
+api_key: ${oc.env:MISTRAL_API_KEY,}
+model: mistral-ocr-latest
+
+# Output format
+table_format: markdown
+
+# Image handling
+include_image_base64: true
+# embed_images_in_markdown: Whether to embed images inline in markdown
+#   - When true, images are embedded as base64 data URIs in markdown
+#   - When false (default), image placeholders remain in markdown (e.g., ![img-0.jpeg](img-0.jpeg))
+#   - Images are still fetched and available in PageContent.images if include_image_base64=true
+#   - Useful for keeping markdown smaller or preserving placeholder references
+#   - Note: Requires include_image_base64=true to have any effect
+#   - Important: Mistral API always includes placeholders; this option controls replacement
+embed_images_in_markdown: false
+
+# Extraction options
+extract_header: false
+extract_footer: false

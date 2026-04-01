@@ -1,0 +1,4 @@
+# Storage configuration for optional disk features
+base_dir: ./data/ocr_output
+save_pdfs: false
+save_manifests: true

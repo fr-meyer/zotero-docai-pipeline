@@ -1,0 +1,13 @@
+# Processing behavior configuration
+dry_run: false
+batch_size: 50
+skip_empty_pages: true
+save_to_disk: false
+note_size_threshold: 180000
+auto_split_oversized_notes: true
+# Extraction mode: how to organize pages into notes
+# Options: 'all_at_once' (single note with all pages, default) or 'page_by_page' (one note per page, legacy)
+extraction_mode: all_at_once
+# File cleanup: controls whether uploaded OCR files are deleted after processing
+# Set to true in production to save storage costs, false for debugging to review uploaded files
+cleanup_uploaded_files: false

@@ -1,0 +1,21 @@
+# Tagging workflow configuration
+selection:
+  include:
+    values:
+      - docai
+    operator: "or"
+  exclude:
+    values:
+      - docai-processed
+    operator: "or"
+  conflict_resolution: "exclude_wins"
+
+apply_on_success:
+  values:
+    - docai-processed
+
+apply_on_error:
+  values:
+    - docai-error
+
+include_abstract: false

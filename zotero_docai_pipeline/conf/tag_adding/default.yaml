@@ -1,0 +1,6 @@
+# Tag Adding feature configuration
+# Controls whether and how tags are applied to matched Zotero items
+
+enabled: false
+assignments: {}  # dict of citation_key -> list[str] tags; each key gets its own tag list
+replace_all_existing_tags: false  # DESTRUCTIVE opt-in: when true, ALL existing tags on matched items are deleted and replaced with their assigned tags

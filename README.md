@@ -134,12 +134,12 @@ The pipeline uses Hydra for configuration management. Most settings can be overr
 | `zotero.error_tagging_enabled` | boolean | `true` | Whether error tags are applied on failure |
 | `download.upload_folder` | string | `./downloads` | Local directory for downloaded PDFs (must be set to an explicit path when `download.enabled=true`) |
 | `download.max_concurrent_downloads` | integer | `5` | Maximum number of concurrent downloads |
-| `storage.base_dir` | string | `./output` | Base directory for on-disk storage (must be set to an explicit path when `storage.save_to_disk=true`) |
+| `storage.base_dir` | string | `./data/ocr_output` | Base directory for on-disk storage (must be set to an explicit path when `processing.save_to_disk=true`) |
 | `processing.cleanup_uploaded_files` | boolean | `false` | Controls file deletion after processing (default: false = keep files) |
 
 > **Explicit output paths required in path-consuming modes:**
 > - `download.enabled=true` requires an explicit `download.upload_folder` override.
-> - `storage.save_to_disk=true` requires an explicit `storage.base_dir` override.
+> - `processing.save_to_disk=true` requires an explicit `storage.base_dir` override.
 >
 > The packaged placeholder defaults are rejected; the CLI will exit with an actionable error if they are not overridden.
 

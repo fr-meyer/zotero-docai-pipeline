@@ -36,6 +36,8 @@ from zotero_docai_pipeline.domain.config import (
     DownloadConfig,
     MistralOCRConfig,
     OCRProviderConfig,
+    PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER,
+    PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR,
     PageIndexOCRConfig,
     ProcessingConfig,
     RetryConfig,
@@ -159,6 +161,12 @@ def validate_flags(cfg: AppConfig) -> None:
     2. At least one operation enabled: At least one of download.enabled,
        ocr.enabled, or tag_adding.enabled must be True. The pipeline requires
        at least one operation to perform.
+
+    Note:
+        When called from ``main()``, the all-disabled check below may be
+        unreachable because ``main()`` returns early via the help/no-op branch.
+        ``validate_flags()`` keeps this guard so other callers still receive the
+        same validation behavior.
 
     Args:
         cfg: Application configuration object
@@ -316,7 +324,7 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
         ocr_config = PageIndexOCRConfig(**cfg.ocr)
     else:
         allowed_providers = {"mistral", "pageindex"}
-        raise ValueError(
+        raise ConfigError(
             f"Unsupported OCR provider {ocr_provider!r}. "
             f"Allowed providers: {sorted(allowed_providers)}. "
             "Dispatch only supports MistralOCRConfig and PageIndexOCRConfig; "
@@ -360,7 +368,7 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
                 e,
             )
             tag_adding_config = TagAddingConfig(**cfg.tag_adding)
-        except Exception as e:
+        except (ConfigError, TypeError, ValueError) as e:
             logger.error(
                 "Failed to build TagAddingConfig from "
                 "TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; falling back to config "
@@ -478,23 +486,27 @@ def main(cfg: DictConfig) -> int:
         # --- Fail-fast path enforcement for download mode ---
         if (
             app_cfg.download.enabled
-            and app_cfg.download.upload_folder.strip() == "./downloads"
+            and app_cfg.download.upload_folder.strip()
+            == PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER
         ):
             raise ConfigError(
                 "download.upload_folder must be set to an explicit path when "
-                "download.enabled=true. The packaged default './downloads' is "
-                "not accepted. Override with: download.upload_folder=/your/path"
+                f"download.enabled=true. The packaged default "
+                f"{PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER!r} is not accepted. "
+                "Override with: download.upload_folder=/your/path"
             )
 
         # --- Fail-fast path enforcement for save-to-disk mode ---
         if (
             app_cfg.processing.save_to_disk
-            and app_cfg.storage.base_dir.strip() == "./data/ocr_output"
+            and app_cfg.storage.base_dir.strip()
+            == PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR
         ):
             raise ConfigError(
                 "storage.base_dir must be set to an explicit path when "
                 "processing.save_to_disk=true. The packaged default "
-                "'./data/ocr_output' is not accepted. Override with: "
+                f"{PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR!r} is not accepted. "
+                "Override with: "
                 "storage.base_dir=/your/path"
             )
 

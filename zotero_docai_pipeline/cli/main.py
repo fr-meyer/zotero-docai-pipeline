@@ -487,7 +487,7 @@ def main(cfg: DictConfig) -> int:
         ):
             raise ConfigError(
                 "storage.base_dir must be set to an explicit path when "
-                "storage.save_to_disk=true. The packaged default "
+                "processing.save_to_disk=true. The packaged default "
                 "'./data/ocr_output' is not accepted. Override with: "
                 "storage.base_dir=/your/path"
             )

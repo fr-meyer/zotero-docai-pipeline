@@ -339,13 +339,14 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
     # TAG_ADDING_ASSIGNMENTS_JSON env-var override
     env_assignments = os.getenv("TAG_ADDING_ASSIGNMENTS_JSON")
     if env_assignments:
+        redacted_assignments = "<REDACTED_PAYLOAD>"
         try:
             parsed_assignments = json.loads(env_assignments)
         except json.JSONDecodeError as e:
             logger.error(
                 "Failed to parse TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; "
                 "falling back to config tag_adding.",
-                env_assignments,
+                redacted_assignments,
                 e,
             )
             tag_adding_config = TagAddingConfig(**cfg.tag_adding)
@@ -367,7 +368,7 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
                         "Failed to build TagAddingConfig from "
                         "TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; falling back to config "
                         "tag_adding.",
-                        env_assignments,
+                        redacted_assignments,
                         e,
                     )
                     tag_adding_config = TagAddingConfig(**cfg.tag_adding)
@@ -514,30 +515,29 @@ def main(cfg: DictConfig) -> int:
         # Validate flag compatibility (dry_run vs download, etc.)
         validate_flags(app_cfg)
 
-        # Validate tree structure configuration (skip in dry-run mode)
-        if not app_cfg.processing.dry_run:
-            validate_tree_config(app_cfg)
-
-        # Initialize clients
-        zotero_client, ocr_client = initialize_clients(app_cfg, logger)
-
-        # Initialize tree processor
-        tree_processor = initialize_tree_processor(app_cfg, logger)
-
-        # Log tree processor status
-        if tree_processor is not None:
-            logger.info("Tree structure processing enabled")
-        elif app_cfg.tree_structure.enabled:
-            logger.warning(
-                "Tree structure processing requested but could not be initialized"
-            )
-        else:
-            logger.debug("Tree structure processing disabled")
-
         # Route to appropriate command
         if app_cfg.processing.dry_run:
+            logger.info("Initializing Zotero client...")
+            zotero_client = ZoteroClient(app_cfg.zotero)
+            logger.info("Zotero client initialized successfully")
             exit_code = dry_run_command(app_cfg, logger, zotero_client)
         else:
+            # Validate tree structure configuration (skip in dry-run mode)
+            validate_tree_config(app_cfg)
+
+            zotero_client, ocr_client = initialize_clients(app_cfg, logger)
+            tree_processor = initialize_tree_processor(app_cfg, logger)
+
+            # Log tree processor status
+            if tree_processor is not None:
+                logger.info("Tree structure processing enabled")
+            elif app_cfg.tree_structure.enabled:
+                logger.warning(
+                    "Tree structure processing requested but could not be initialized"
+                )
+            else:
+                logger.debug("Tree structure processing disabled")
+
             exit_code = process_command(
                 app_cfg, logger, zotero_client, ocr_client, tree_processor
             )

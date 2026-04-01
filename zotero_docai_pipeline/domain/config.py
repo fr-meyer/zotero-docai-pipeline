@@ -24,8 +24,10 @@ class ConfigError(Exception):
     """
 
 
-PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER = "./downloads"
-PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR = "./data/ocr_output"
+PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER = "__PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER__"
+PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR = "__PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR__"
+
+_configs_registered = False
 
 
 @dataclass
@@ -728,6 +730,10 @@ def register_configs() -> None:
     This function must be called before Hydra initializes to enable type-safe
     configuration validation and IDE autocomplete support.
     """
+    global _configs_registered
+    if _configs_registered:
+        return
+
     cs = ConfigStore.instance()
 
     # Register config groups with names matching YAML defaults
@@ -748,3 +754,4 @@ def register_configs() -> None:
 
     # Register top-level config
     cs.store(name="config", node=AppConfig)
+    _configs_registered = True

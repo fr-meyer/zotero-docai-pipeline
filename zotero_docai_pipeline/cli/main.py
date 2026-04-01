@@ -315,7 +315,13 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
     elif ocr_provider == "pageindex":
         ocr_config = PageIndexOCRConfig(**cfg.ocr)
     else:
-        ocr_config = OCRProviderConfig(**cfg.ocr)
+        allowed_providers = {"mistral", "pageindex"}
+        raise ValueError(
+            f"Unsupported OCR provider {ocr_provider!r}. "
+            f"Allowed providers: {sorted(allowed_providers)}. "
+            "Dispatch only supports MistralOCRConfig and PageIndexOCRConfig; "
+            "OCRProviderConfig is not a valid fallback for unknown providers."
+        )
 
     tree_structure_config = TreeStructureConfig(**cfg.tree_structure)
 
@@ -467,7 +473,7 @@ def main(cfg: DictConfig) -> int:
             and not app_cfg.tag_adding.enabled
         ):
             print(_HELP_TEXT)
-            sys.exit(0)
+            return 0
 
         # --- Fail-fast path enforcement for download mode ---
         if (

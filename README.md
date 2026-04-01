@@ -3,6 +3,7 @@
 ![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/fr-meyer/zotero-docai-pipeline?utm_source=oss&utm_medium=github&utm_campaign=fr-meyer%2Fzotero-docai-pipeline&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 Automate PDF-to-Markdown extraction for Zotero attachments using OCR providers (PageIndex or Mistral). Results are saved as rich text Zotero notes ready for Notero/Notion sync, with optional hierarchical tree structure extraction.
 

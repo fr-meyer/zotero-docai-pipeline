@@ -35,7 +35,6 @@ from zotero_docai_pipeline.domain.config import (
     ConfigError,
     DownloadConfig,
     MistralOCRConfig,
-    OCRProviderConfig,
     PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER,
     PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR,
     PageIndexOCRConfig,
@@ -342,25 +341,7 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
     if env_assignments:
         try:
             parsed_assignments = json.loads(env_assignments)
-            if isinstance(parsed_assignments, dict):
-                extra_fields = {
-                    k: v
-                    for k, v in cfg.tag_adding.items()
-                    if k not in ("enabled", "assignments")
-                }
-                tag_adding_config = TagAddingConfig(
-                    enabled=True,
-                    assignments=parsed_assignments,
-                    **extra_fields,
-                )
-            else:
-                logger.error(
-                    "TAG_ADDING_ASSIGNMENTS_JSON must decode to a dict, "
-                    "got %s; falling back to config tag_adding.",
-                    type(parsed_assignments).__name__,
-                )
-                tag_adding_config = TagAddingConfig(**cfg.tag_adding)
-        except (ValueError, json.JSONDecodeError) as e:
+        except json.JSONDecodeError as e:
             logger.error(
                 "Failed to parse TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; "
                 "falling back to config tag_adding.",
@@ -368,15 +349,35 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
                 e,
             )
             tag_adding_config = TagAddingConfig(**cfg.tag_adding)
-        except (ConfigError, TypeError, ValueError) as e:
-            logger.error(
-                "Failed to build TagAddingConfig from "
-                "TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; falling back to config "
-                "tag_adding.",
-                env_assignments,
-                e,
-            )
-            tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+        else:
+            if isinstance(parsed_assignments, dict):
+                extra_fields = {
+                    k: v
+                    for k, v in cfg.tag_adding.items()
+                    if k not in ("enabled", "assignments")
+                }
+                try:
+                    tag_adding_config = TagAddingConfig(
+                        enabled=True,
+                        assignments=parsed_assignments,
+                        **extra_fields,
+                    )
+                except (ConfigError, TypeError, ValueError) as e:
+                    logger.error(
+                        "Failed to build TagAddingConfig from "
+                        "TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; falling back to config "
+                        "tag_adding.",
+                        env_assignments,
+                        e,
+                    )
+                    tag_adding_config = TagAddingConfig(**cfg.tag_adding)
+            else:
+                logger.error(
+                    "TAG_ADDING_ASSIGNMENTS_JSON must decode to a dict, "
+                    "got %s; falling back to config tag_adding.",
+                    type(parsed_assignments).__name__,
+                )
+                tag_adding_config = TagAddingConfig(**cfg.tag_adding)
     else:
         tag_adding_config = TagAddingConfig(**cfg.tag_adding)
 

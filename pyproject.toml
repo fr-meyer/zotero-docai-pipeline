@@ -39,12 +39,18 @@ dependencies = [
     "omegaconf",
 ]
 
+[project.scripts]
+zotero-docai-pipeline = "zotero_docai_pipeline.cli.main:main"
+
 [tool.setuptools]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["zotero_docai_pipeline*"]
 exclude = ["tests*", "*.tests*", "*.tests.*", "tests.*"]
+
+[tool.setuptools.package-data]
+zotero_docai_pipeline = ["conf/**/*.yaml"]
 
 [tool.ruff]
 target-version = "py311"

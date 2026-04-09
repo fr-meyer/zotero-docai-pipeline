@@ -1,0 +1,59 @@
+name: CodeRabbit PR automation wrapper
+
+# Draft GitHub workflow template for consumer repositories.
+#
+# Setup notes after creating this workflow from the template:
+# 1. Ensure the reusable workflow reference below points at the desired shared repo/ref.
+# 2. Configure repository or organization variables as needed:
+#    - CODERABBIT_RUNNER_LABELS_JSON
+#    - CODERABBIT_AGENT_COMMAND_JSON or CODERABBIT_AGENT_COMMAND
+#    - CODERABBIT_CLI (optional)
+# 3. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to inspect
+        required: true
+        type: number
+      run_validation:
+        description: Whether to run validation after remediation
+        required: false
+        type: boolean
+        default: true
+      working_tree_must_be_clean:
+        description: Whether the target checkout must be clean before remediation
+        required: false
+        type: boolean
+        default: true
+      max_cycles:
+        description: Maximum bounded remediation cycles
+        required: false
+        type: number
+        default: 3
+      shared_repository_ref:
+        description: Branch, tag, or SHA of the shared toolkit workflow to use
+        required: false
+        type: string
+        default: main
+
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  coderabbit-pr-automation:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.fork == false }}
+    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@main
+    with:
+      pr_number: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number || github.event.pull_request.number }}
+      run_validation: ${{ github.event_name == 'workflow_dispatch' && inputs.run_validation || github.event_name != 'workflow_dispatch' }}
+      working_tree_must_be_clean: ${{ github.event_name == 'workflow_dispatch' && inputs.working_tree_must_be_clean || github.event_name != 'workflow_dispatch' }}
+      max_cycles: ${{ github.event_name == 'workflow_dispatch' && inputs.max_cycles || 3 }}
+      shared_repository_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.shared_repository_ref || 'main' }}
+      runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
+      agent_command_json: ${{ vars.CODERABBIT_AGENT_COMMAND_JSON }}
+      agent_command: ${{ vars.CODERABBIT_AGENT_COMMAND }}
+      coderabbit_cli: ${{ vars.CODERABBIT_CLI }}
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

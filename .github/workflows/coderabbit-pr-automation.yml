@@ -5,10 +5,15 @@ name: CodeRabbit PR automation wrapper
 # Setup notes after creating this workflow from the template:
 # 1. Ensure the reusable workflow reference below points at the desired shared repo/ref.
 # 2. Configure repository or organization variables as needed:
-#    - CODERABBIT_RUNNER_LABELS_JSON
-#    - CODERABBIT_AGENT_COMMAND_JSON or CODERABBIT_AGENT_COMMAND
-#    - CODERABBIT_CLI (optional)
+#   - CODERABBIT_RUNNER_LABELS_JSON
+#   - CODERABBIT_AGENT_COMMAND_JSON or CODERABBIT_AGENT_COMMAND
+#   - CODERABBIT_CLI (optional)
 # 3. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
 
 on:
   workflow_dispatch:

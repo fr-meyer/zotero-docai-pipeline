@@ -39,7 +39,7 @@ on:
 jobs:
   coderabbit-pr-automation-dispatch:
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@main
+    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@39a84b813769663a445cdeac62322ffd2ee8a435
     with:
       pr_number: ${{ fromJSON(inputs.pr_number) }}
       run_validation: ${{ inputs.run_validation }}
@@ -52,15 +52,15 @@ jobs:
       agent_command: ${{ vars.CODERABBIT_AGENT_COMMAND }}
       coderabbit_cli: ${{ vars.CODERABBIT_CLI }}
       cursor_cli: ${{ vars.CURSOR_CLI }}
-      install_shared_skills: ${{ vars.CODERABBIT_INSTALL_SHARED_SKILLS != '' && fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS) || true }}
-      install_cursor_rules: ${{ vars.CODERABBIT_INSTALL_CURSOR_RULES != '' && fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES) || true }}
-      shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE != '' && vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
-      auto_commit: ${{ vars.CODERABBIT_AUTO_COMMIT != '' && fromJSON(vars.CODERABBIT_AUTO_COMMIT) || false }}
-      auto_push: ${{ vars.CODERABBIT_AUTO_PUSH != '' && fromJSON(vars.CODERABBIT_AUTO_PUSH) || false }}
-      commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY != '' && vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
-      commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE != '' && vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
-      fixed_commit_count: ${{ vars.CODERABBIT_FIXED_COMMIT_COUNT != '' && fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT) || 1 }}
-      stop_on_ambiguous_remainder: ${{ vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER != '' && fromJSON(vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER) || true }}
+      install_shared_skills: ${{ fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS || 'true') }}
+      install_cursor_rules: ${{ fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES || 'true') }}
+      shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
+      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'false') }}
+      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'false') }}
+      commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
+      commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
+      fixed_commit_count: ${{ fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT || '1') }}
+      stop_on_ambiguous_remainder: ${{ fromJSON(vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER || 'true') }}
     secrets:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
@@ -68,7 +68,7 @@ jobs:
 
   coderabbit-pr-automation-pr:
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false }}
-    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@main
+    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@39a84b813769663a445cdeac62322ffd2ee8a435
     with:
       pr_number: ${{ github.event.pull_request.number }}
       run_validation: false
@@ -81,15 +81,15 @@ jobs:
       agent_command: ${{ vars.CODERABBIT_AGENT_COMMAND }}
       coderabbit_cli: ${{ vars.CODERABBIT_CLI }}
       cursor_cli: ${{ vars.CURSOR_CLI }}
-      install_shared_skills: ${{ vars.CODERABBIT_INSTALL_SHARED_SKILLS != '' && fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS) || true }}
-      install_cursor_rules: ${{ vars.CODERABBIT_INSTALL_CURSOR_RULES != '' && fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES) || true }}
-      shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE != '' && vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
-      auto_commit: ${{ vars.CODERABBIT_AUTO_COMMIT != '' && fromJSON(vars.CODERABBIT_AUTO_COMMIT) || false }}
-      auto_push: ${{ vars.CODERABBIT_AUTO_PUSH != '' && fromJSON(vars.CODERABBIT_AUTO_PUSH) || false }}
-      commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY != '' && vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
-      commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE != '' && vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
-      fixed_commit_count: ${{ vars.CODERABBIT_FIXED_COMMIT_COUNT != '' && fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT) || 1 }}
-      stop_on_ambiguous_remainder: ${{ vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER != '' && fromJSON(vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER) || true }}
+      install_shared_skills: ${{ fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS || 'true') }}
+      install_cursor_rules: ${{ fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES || 'true') }}
+      shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
+      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'false') }}
+      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'false') }}
+      commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
+      commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
+      fixed_commit_count: ${{ fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT || '1') }}
+      stop_on_ambiguous_remainder: ${{ fromJSON(vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER || 'true') }}
     secrets:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}

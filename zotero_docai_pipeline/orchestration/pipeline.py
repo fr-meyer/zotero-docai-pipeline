@@ -1788,9 +1788,10 @@ class Pipeline:
         else:
             self.logger.info("Tag Adding: DISABLED")
 
-        # Validate tree extraction configuration for Mistral OCR
+        # Validate tree extraction configuration for Mistral OCR (OCR path only)
         if (
             self.tree_structure_config.enabled
+            and self.ocr_config.enabled
             and self.ocr_config.provider == "mistral"
         ):
             # Check if PageIndex credentials are available via environment

@@ -95,18 +95,18 @@ def initialize_clients(
     ocr_client: OCRClient
     if provider == "mistral":
         if not isinstance(cfg.ocr, MistralOCRConfig):
-            raise ValueError(
+            raise ConfigError(
                 "OCR config is not MistralOCRConfig for provider 'mistral'"
             )
         ocr_client = MistralClient(cfg.ocr)
     elif provider == "pageindex":
         if not isinstance(cfg.ocr, PageIndexOCRConfig):
-            raise ValueError(
+            raise ConfigError(
                 "OCR config is not PageIndexOCRConfig for provider 'pageindex'"
             )
         ocr_client = PageIndexClient(cfg.ocr)
     else:
-        raise ValueError(f"Unknown OCR provider: {provider}")
+        raise ConfigError(f"Unknown OCR provider: {provider}")
 
     logger.info("OCR client initialized successfully")
 
@@ -458,7 +458,8 @@ Entry points:
 Required environment variables:
   ZOTERO_LIBRARY_ID   Your Zotero user-library numeric ID
   ZOTERO_API_KEY      Zotero API key (https://www.zotero.org/settings/keys)
-  Plus one OCR provider key (MISTRAL_API_KEY or PAGEINDEX_API_KEY)
+  OCR provider key    MISTRAL_API_KEY or PAGEINDEX_API_KEY — required only when
+                      OCR is enabled (not needed for download-only or tag-only runs)
 
 Key override examples:
   ocr.enabled=true
@@ -542,21 +543,27 @@ def main(cfg: DictConfig) -> int:
             logger.info("Zotero client initialized successfully")
             exit_code = dry_run_command(app_cfg, logger, zotero_client)
         else:
-            # Validate tree structure configuration (skip in dry-run mode)
-            validate_tree_config(app_cfg)
-
             zotero_client, ocr_client = initialize_clients(app_cfg, logger)
-            tree_processor = initialize_tree_processor(app_cfg, logger)
 
-            # Log tree processor status
-            if tree_processor is not None:
-                logger.info("Tree structure processing enabled")
-            elif app_cfg.tree_structure.enabled:
-                logger.warning(
-                    "Tree structure processing requested but could not be initialized"
-                )
+            tree_processor: TreeStructureProcessor | None = None
+            if app_cfg.ocr.enabled:
+                validate_tree_config(app_cfg)
+                tree_processor = initialize_tree_processor(app_cfg, logger)
+
+            if app_cfg.ocr.enabled:
+                if tree_processor is not None:
+                    logger.info("Tree structure processing enabled")
+                elif app_cfg.tree_structure.enabled:
+                    logger.warning(
+                        "Tree structure processing requested but could not be initialized"
+                    )
+                else:
+                    logger.debug("Tree structure processing disabled")
             else:
-                logger.debug("Tree structure processing disabled")
+                logger.debug(
+                    "Tree structure processing skipped (OCR disabled; "
+                    "matches download-only / tag-only pipeline paths)"
+                )
 
             exit_code = process_command(
                 app_cfg, logger, zotero_client, ocr_client, tree_processor

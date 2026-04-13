@@ -65,6 +65,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       CODERABBIT_API_KEY: ${{ secrets.CODERABBIT_API_KEY }}
+      WORKFLOW_PUSH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN }}
 
   coderabbit-pr-automation-pr:
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false }}
@@ -94,3 +95,4 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       CODERABBIT_API_KEY: ${{ secrets.CODERABBIT_API_KEY }}
+      WORKFLOW_PUSH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN }}

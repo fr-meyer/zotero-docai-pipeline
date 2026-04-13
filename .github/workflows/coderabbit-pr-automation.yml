@@ -1,30 +1,7 @@
 name: CodeRabbit PR automation wrapper
 
-# Draft GitHub workflow template for consumer repositories.
-#
-# Setup notes after creating this workflow from the template:
-# 1. Ensure the reusable workflow reference below points at the desired shared repo/ref.
-# 2. Configure repository or organization variables as needed:
-#    - CODERABBIT_RUNNER_LABELS_JSON
-#    - CODERABBIT_AGENT_RUNTIME
-#    - CODERABBIT_AGENT_COMMAND_JSON or CODERABBIT_AGENT_COMMAND
-#    - CODERABBIT_CLI (optional)
-#    - CURSOR_CLI (optional)
-#    - CODERABBIT_INSTALL_SHARED_SKILLS (optional, default true)
-#    - CODERABBIT_INSTALL_CURSOR_RULES (optional, default true)
-#    - CODERABBIT_SHARED_SKILLS_INSTALL_MODE (optional, default copy)
-#    - CODERABBIT_AUTO_COMMIT (optional, default false)
-#    - CODERABBIT_COMMIT_STRATEGY (optional, default single-commit)
-#    - CODERABBIT_COMMIT_COUNT_MODE (optional, default auto)
-#    - CODERABBIT_FIXED_COMMIT_COUNT (optional, default 1)
-#    - CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER (optional, default true)
-# 3. Configure repository or organization secrets as needed:
-#    - CURSOR_API_KEY when CODERABBIT_AGENT_RUNTIME=cursor
-#    - CODERABBIT_API_KEY only if you explicitly enable CodeRabbit CLI validation
-# 4. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
-
 permissions:
-  contents: read
+  contents: write
   pull-requests: read
   actions: read
 
@@ -79,6 +56,7 @@ jobs:
       install_cursor_rules: ${{ vars.CODERABBIT_INSTALL_CURSOR_RULES != '' && fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES) || true }}
       shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE != '' && vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
       auto_commit: ${{ vars.CODERABBIT_AUTO_COMMIT != '' && fromJSON(vars.CODERABBIT_AUTO_COMMIT) || false }}
+      auto_push: ${{ vars.CODERABBIT_AUTO_PUSH != '' && fromJSON(vars.CODERABBIT_AUTO_PUSH) || false }}
       commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY != '' && vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
       commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE != '' && vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
       fixed_commit_count: ${{ vars.CODERABBIT_FIXED_COMMIT_COUNT != '' && fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT) || 1 }}
@@ -107,6 +85,7 @@ jobs:
       install_cursor_rules: ${{ vars.CODERABBIT_INSTALL_CURSOR_RULES != '' && fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES) || true }}
       shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE != '' && vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
       auto_commit: ${{ vars.CODERABBIT_AUTO_COMMIT != '' && fromJSON(vars.CODERABBIT_AUTO_COMMIT) || false }}
+      auto_push: ${{ vars.CODERABBIT_AUTO_PUSH != '' && fromJSON(vars.CODERABBIT_AUTO_PUSH) || false }}
       commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY != '' && vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
       commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE != '' && vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
       fixed_commit_count: ${{ vars.CODERABBIT_FIXED_COMMIT_COUNT != '' && fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT) || 1 }}

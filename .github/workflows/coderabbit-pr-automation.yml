@@ -10,6 +10,14 @@ name: CodeRabbit PR automation wrapper
 #    - CODERABBIT_AGENT_COMMAND_JSON or CODERABBIT_AGENT_COMMAND
 #    - CODERABBIT_CLI (optional)
 #    - CURSOR_CLI (optional)
+#    - CODERABBIT_INSTALL_SHARED_SKILLS (optional, default true)
+#    - CODERABBIT_INSTALL_CURSOR_RULES (optional, default true)
+#    - CODERABBIT_SHARED_SKILLS_INSTALL_MODE (optional, default copy)
+#    - CODERABBIT_AUTO_COMMIT (optional, default false)
+#    - CODERABBIT_COMMIT_STRATEGY (optional, default single-commit)
+#    - CODERABBIT_COMMIT_COUNT_MODE (optional, default auto)
+#    - CODERABBIT_FIXED_COMMIT_COUNT (optional, default 1)
+#    - CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER (optional, default true)
 # 3. Configure repository or organization secrets as needed:
 #    - CURSOR_API_KEY when CODERABBIT_AGENT_RUNTIME=cursor
 #    - CODERABBIT_API_KEY only if you explicitly enable CodeRabbit CLI validation
@@ -67,6 +75,14 @@ jobs:
       agent_command: ${{ vars.CODERABBIT_AGENT_COMMAND }}
       coderabbit_cli: ${{ vars.CODERABBIT_CLI }}
       cursor_cli: ${{ vars.CURSOR_CLI }}
+      install_shared_skills: ${{ vars.CODERABBIT_INSTALL_SHARED_SKILLS != '' && fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS) || true }}
+      install_cursor_rules: ${{ vars.CODERABBIT_INSTALL_CURSOR_RULES != '' && fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES) || true }}
+      shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE != '' && vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
+      auto_commit: ${{ vars.CODERABBIT_AUTO_COMMIT != '' && fromJSON(vars.CODERABBIT_AUTO_COMMIT) || false }}
+      commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY != '' && vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
+      commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE != '' && vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
+      fixed_commit_count: ${{ vars.CODERABBIT_FIXED_COMMIT_COUNT != '' && fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT) || 1 }}
+      stop_on_ambiguous_remainder: ${{ vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER != '' && fromJSON(vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER) || true }}
     secrets:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
@@ -87,6 +103,14 @@ jobs:
       agent_command: ${{ vars.CODERABBIT_AGENT_COMMAND }}
       coderabbit_cli: ${{ vars.CODERABBIT_CLI }}
       cursor_cli: ${{ vars.CURSOR_CLI }}
+      install_shared_skills: ${{ vars.CODERABBIT_INSTALL_SHARED_SKILLS != '' && fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS) || true }}
+      install_cursor_rules: ${{ vars.CODERABBIT_INSTALL_CURSOR_RULES != '' && fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES) || true }}
+      shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE != '' && vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
+      auto_commit: ${{ vars.CODERABBIT_AUTO_COMMIT != '' && fromJSON(vars.CODERABBIT_AUTO_COMMIT) || false }}
+      commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY != '' && vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
+      commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE != '' && vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
+      fixed_commit_count: ${{ vars.CODERABBIT_FIXED_COMMIT_COUNT != '' && fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT) || 1 }}
+      stop_on_ambiguous_remainder: ${{ vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER != '' && fromJSON(vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER) || true }}
     secrets:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}

@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import sys
+from collections.abc import Mapping
 
 import hydra
 from omegaconf import DictConfig
@@ -66,19 +67,28 @@ register_configs()
 
 def initialize_clients(
     cfg: AppConfig, logger: logging.Logger
-) -> tuple[ZoteroClient, OCRClient]:
-    """Initialize Zotero and OCR clients from configuration.
+) -> tuple[ZoteroClient, OCRClient | None]:
+    """Initialize Zotero client and, when OCR is enabled, the OCR client.
+
+    OCR clients read API credentials in ``__init__``. They are not constructed
+    when ``cfg.ocr.enabled`` is False so download-only and tag-adding-only runs
+    do not require Mistral/PageIndex keys.
 
     Args:
         cfg: Application configuration object
         logger: Logger instance
 
     Returns:
-        Tuple of (zotero_client, ocr_client)
+        Tuple of ``(zotero_client, ocr_client)``. ``ocr_client`` is None when
+        OCR is disabled.
     """
     logger.info("Initializing Zotero client...")
     zotero_client = ZoteroClient(cfg.zotero)
     logger.info("Zotero client initialized successfully")
+
+    if not cfg.ocr.enabled:
+        logger.info("OCR disabled — skipping OCR client initialization")
+        return zotero_client, None
 
     logger.info("Initializing OCR client...")
     provider = cfg.ocr.provider
@@ -289,6 +299,16 @@ def initialize_tree_processor(
 # ---------------------------------------------------------------------------
 
 
+def _defaults_entry_is_old_mistral_default(d: object) -> bool:
+    """Detect legacy Hydra defaults entries that selected ``mistral: default``."""
+    if "mistral: default" in str(d):
+        return True
+    if isinstance(d, Mapping) and "mistral" in d:
+        v = d["mistral"]
+        return v == "default" or str(v).strip() == "default"
+    return False
+
+
 def build_app_config(cfg: DictConfig) -> AppConfig:
     """Convert a Hydra DictConfig into a validated AppConfig.
 
@@ -307,7 +327,7 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
     logger = logging.getLogger(__name__)
 
     defaults = cfg.get("defaults", [])
-    if defaults and any("mistral: default" in str(d) for d in defaults):
+    if defaults and any(_defaults_entry_is_old_mistral_default(d) for d in defaults):
         raise ConfigError(
             "Migration needed: Old 'mistral: default' config structure "
             "detected. Please update your config defaults to use "
@@ -369,7 +389,7 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
                         "TAG_ADDING_ASSIGNMENTS_JSON=%r: %s; falling back to config "
                         "tag_adding.",
                         redacted_assignments,
-                        e,
+                        e.__class__.__name__,
                     )
                     tag_adding_config = TagAddingConfig(**cfg.tag_adding)
             else:

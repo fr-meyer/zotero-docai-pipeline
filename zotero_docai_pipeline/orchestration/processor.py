@@ -92,7 +92,7 @@ class ItemProcessor:
     def __init__(
         self,
         zotero_client: ZoteroClient,
-        ocr_client: OCRClient,
+        ocr_client: OCRClient | None,
         config: ProcessingConfig,
         tree_processor: TreeStructureProcessor | None = None,
     ) -> None:
@@ -100,7 +100,8 @@ class ItemProcessor:
 
         Args:
             zotero_client: Client for interacting with Zotero API.
-            ocr_client: Client for interacting with OCR API.
+            ocr_client: OCR client when the pipeline runs OCR; may be None when
+                OCR is disabled (not used by ``process_item``).
             config: Processing configuration containing batch_size and skip_empty_pages.
             tree_processor: Optional TreeStructureProcessor for extracting
                 document tree structures.

@@ -140,7 +140,7 @@ class Pipeline:
     def __init__(
         self,
         zotero_client: ZoteroClient,
-        ocr_client: OCRClient,
+        ocr_client: OCRClient | None,
         processor: ItemProcessor,
         zotero_config: ZoteroConfig,
         processing_config: ProcessingConfig,
@@ -156,7 +156,7 @@ class Pipeline:
 
         Args:
             zotero_client: Client for interacting with Zotero API.
-            ocr_client: Client for interacting with OCR API.
+            ocr_client: OCR client when OCR is enabled; None when OCR is disabled.
             processor: ItemProcessor instance for per-item processing.
             zotero_config: Configuration containing tag names and
             error_tagging_enabled flag.
@@ -981,10 +981,16 @@ class Pipeline:
         # Initialize result mapping
         result_map: dict[str, list[UploadedDocument]] = {}
 
+        ocr = self.ocr_client
+        if ocr is None:
+            raise RuntimeError(
+                "OCR client is not initialized but batch upload was invoked"
+            )
+
         # Upload all PDFs in batch with progress tracking
         with ProgressBar(total=len(pdfs), desc="Uploading PDFs", unit="pdf") as pbar:
             # Call OCR client's batch upload method
-            uploaded_docs = self.ocr_client.upload_pdfs_batch(pdfs)
+            uploaded_docs = ocr.upload_pdfs_batch(pdfs)
 
             # Update progress bar after completion (synchronous upload)
             pbar.update(len(uploaded_docs))
@@ -1107,8 +1113,14 @@ class Pipeline:
             )
 
             # Call OCR client batch polling method with progress callback
+            ocr = self.ocr_client
+            if ocr is None:
+                self.logger.error(
+                    "OCR client is not initialized but batch polling was invoked"
+                )
+                return {}
             try:
-                ocr_results = self.ocr_client.poll_ocr_results_batch(
+                ocr_results = ocr.poll_ocr_results_batch(
                     doc_ids, progress_callback
                 )
             except Exception as e:
@@ -1206,7 +1218,16 @@ class Pipeline:
         self.logger.info(f"Extracting tree structures for {len(doc_ids)} documents")
 
         # Detect OCR provider for routing to appropriate extraction method
-        provider = self.ocr_client.provider
+        if self.ocr_config.provider == "pageindex":
+            provider = OCRProvider.PAGEINDEX
+        elif self.ocr_config.provider == "mistral":
+            provider = OCRProvider.MISTRAL
+        else:
+            self.logger.error(
+                f"Unknown OCR provider in config: {self.ocr_config.provider!r}, "
+                "skipping tree extraction"
+            )
+            return tree_structures
         provider_name = "PageIndex" if provider == OCRProvider.PAGEINDEX else "Mistral"
         self.logger.debug(f"Using {provider_name} tree extraction method")
 
@@ -1519,9 +1540,16 @@ class Pipeline:
         cleanup_success_count = 0
         cleanup_failure_count = 0
 
+        ocr = self.ocr_client
+        if ocr is None:
+            self.logger.warning(
+                "Skipping OCR file cleanup: OCR client is not initialized"
+            )
+            return
+
         for doc_id in doc_ids_to_cleanup:
             try:
-                self.ocr_client.cleanup_file(doc_id)
+                ocr.cleanup_file(doc_id)
                 cleanup_success_count += 1
             except Exception as cleanup_error:
                 cleanup_failure_count += 1
@@ -1763,7 +1791,7 @@ class Pipeline:
         # Validate tree extraction configuration for Mistral OCR
         if (
             self.tree_structure_config.enabled
-            and self.ocr_client.provider == OCRProvider.MISTRAL
+            and self.ocr_config.provider == "mistral"
         ):
             # Check if PageIndex credentials are available via environment
             has_pageindex_env = bool(os.getenv("PAGEINDEX_API_KEY"))

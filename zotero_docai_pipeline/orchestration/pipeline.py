@@ -1115,10 +1115,9 @@ class Pipeline:
             # Call OCR client batch polling method with progress callback
             ocr = self.ocr_client
             if ocr is None:
-                self.logger.error(
+                raise RuntimeError(
                     "OCR client is not initialized but batch polling was invoked"
                 )
-                return {}
             try:
                 ocr_results = ocr.poll_ocr_results_batch(
                     doc_ids, progress_callback

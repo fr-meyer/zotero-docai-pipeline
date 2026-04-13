@@ -70,8 +70,8 @@ jobs:
       install_shared_skills: ${{ fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS || 'true') }}
       install_cursor_rules: ${{ fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES || 'true') }}
       shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
-      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'false') }}
-      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'false') }}
+      auto_commit: true
+      auto_push: true
       commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
       commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
       fixed_commit_count: ${{ fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT || '1') }}
@@ -80,4 +80,3 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       CODERABBIT_API_KEY: ${{ secrets.CODERABBIT_API_KEY }}
-

@@ -31,7 +31,7 @@ on:
         description: Branch, tag, or SHA of the shared toolkit workflow to use
         required: false
         type: string
-        default: main
+        default: 743e51edf2385216507358e3f7fa285a318965d8
 
   pull_request:
     types: [opened, synchronize, reopened]
@@ -39,7 +39,7 @@ on:
 jobs:
   coderabbit-pr-automation-dispatch:
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@39a84b813769663a445cdeac62322ffd2ee8a435
+    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@743e51edf2385216507358e3f7fa285a318965d8
     with:
       pr_number: ${{ fromJSON(inputs.pr_number) }}
       run_validation: ${{ inputs.run_validation }}
@@ -69,13 +69,13 @@ jobs:
 
   coderabbit-pr-automation-pr:
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false }}
-    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@39a84b813769663a445cdeac62322ffd2ee8a435
+    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@743e51edf2385216507358e3f7fa285a318965d8
     with:
       pr_number: ${{ github.event.pull_request.number }}
       run_validation: false
       working_tree_must_be_clean: true
       max_cycles: 3
-      shared_repository_ref: main
+      shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8
       runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
       agent_runtime: ${{ vars.CODERABBIT_AGENT_RUNTIME != '' && vars.CODERABBIT_AGENT_RUNTIME || 'none' }}
       agent_command_json: ${{ vars.CODERABBIT_AGENT_COMMAND_JSON }}

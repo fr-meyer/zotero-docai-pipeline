@@ -1,0 +1,341 @@
+--- a/.github/workflows/coderabbit-pr-automation.yml
++++ b/.github/workflows/coderabbit-pr-automation.yml
+@@ -1,4 +1,33 @@
+ name: CodeRabbit PR automation wrapper
+
++
+
++# Source asset for a starter workflow.
+
++# This canonical source file lives under templates/starter-workflows/ in the asset library.
+
++# The uses: target below is a publication-target shape for a serving repo, not a claim
+
++# that this source-library repo currently serves the reusable workflow at HEAD.
+
++# If you publish or copy it later, keep the pinned reusable-workflow uses ref and the
+
++# paired shared_repository_ref aligned.
+
++#
+
++# Setup notes after creating this workflow from the template:
+
++# 1. Configure repository or organization variables as needed:
+
++#    - CODERABBIT_RUNNER_LABELS_JSON
+
++#    - CODERABBIT_AGENT_RUNTIME
+
++#    - CODERABBIT_AGENT_COMMAND_JSON or CODERABBIT_AGENT_COMMAND
+
++#    - CODERABBIT_CLI (optional)
+
++#    - CURSOR_CLI (optional)
+
++#    - CODERABBIT_INSTALL_SHARED_SKILLS (optional, default true)
+
++#    - CODERABBIT_INSTALL_CURSOR_RULES (optional, default true)
+
++#    - CODERABBIT_SHARED_SKILLS_INSTALL_MODE (optional, default copy)
+
++#    - CODERABBIT_AUTO_COMMIT (optional, default false)
+
++#    - CODERABBIT_AUTO_PUSH (optional, default false)
+
++#    - CODERABBIT_COMMIT_STRATEGY (optional, default single-commit)
+
++#    - CODERABBIT_COMMIT_COUNT_MODE (optional, default auto)
+
++#    - CODERABBIT_FIXED_COMMIT_COUNT (optional, default 1)
+
++#    - CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER (optional, default true)
+
++# 2. Configure repository or organization secrets as needed:
+
++#    - CURSOR_API_KEY when CODERABBIT_AGENT_RUNTIME=cursor
+
++#    - CODERABBIT_API_KEY only if you explicitly enable CodeRabbit CLI validation
+
++#    - WORKFLOW_PUSH_TOKEN when remediation may need to push changes under .github/workflows/
+
++# 3. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
+
+ 
+
+ permissions:
+
+   contents: write
+
+@@ -27,25 +56,19 @@
+         required: false
+
+         type: number
+
+         default: 3
+
+-      shared_repository_ref:
+
+-        description: Branch, tag, or SHA of the shared toolkit workflow to use
+
+-        required: false
+
+-        type: string
+
+-        default: main
+
+-
+
+   pull_request:
+
+     types: [opened, synchronize, reopened]
+
+ 
+
+ jobs:
+
+   coderabbit-pr-automation-dispatch:
+
+     if: ${{ github.event_name == 'workflow_dispatch' }}
+
+-    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@39a84b813769663a445cdeac62322ffd2ee8a435
+
++    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@743e51edf2385216507358e3f7fa285a318965d8
+
+     with:
+
+       pr_number: ${{ fromJSON(inputs.pr_number) }}
+
+       run_validation: ${{ inputs.run_validation }}
+
+       working_tree_must_be_clean: ${{ inputs.working_tree_must_be_clean }}
+
+       max_cycles: ${{ fromJSON(inputs.max_cycles) }}
+
+-      shared_repository_ref: ${{ inputs.shared_repository_ref }}
+
++      shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8
+
+       runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
+
+       agent_runtime: ${{ vars.CODERABBIT_AGENT_RUNTIME != '' && vars.CODERABBIT_AGENT_RUNTIME || 'none' }}
+
+       agent_command_json: ${{ vars.CODERABBIT_AGENT_COMMAND_JSON }}
+
+@@ -55,8 +78,8 @@
+       install_shared_skills: ${{ fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS || 'true') }}
+
+       install_cursor_rules: ${{ fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES || 'true') }}
+
+       shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
+
+-      auto_commit: true
+
+-      auto_push: true
+
++      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'false') }}
+
++      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'false') }}
+
+       commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
+
+       commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
+
+       fixed_commit_count: ${{ fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT || '1') }}
+
+@@ -69,13 +92,13 @@
+ 
+
+   coderabbit-pr-automation-pr:
+
+     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false }}
+
+-    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@39a84b813769663a445cdeac62322ffd2ee8a435
+
++    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@743e51edf2385216507358e3f7fa285a318965d8
+
+     with:
+
+       pr_number: ${{ github.event.pull_request.number }}
+
+       run_validation: false
+
+       working_tree_must_be_clean: true
+
+       max_cycles: 3
+
+-      shared_repository_ref: main
+
++      shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8
+
+       runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
+
+       agent_runtime: ${{ vars.CODERABBIT_AGENT_RUNTIME != '' && vars.CODERABBIT_AGENT_RUNTIME || 'none' }}
+
+       agent_command_json: ${{ vars.CODERABBIT_AGENT_COMMAND_JSON }}
+
+@@ -85,8 +108,8 @@
+       install_shared_skills: ${{ fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS || 'true') }}
+
+       install_cursor_rules: ${{ fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES || 'true') }}
+
+       shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
+
+-      auto_commit: true
+
+-      auto_push: true
+
++      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'false') }}
+
++      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'false') }}
+
+       commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
+
+       commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
+
+       fixed_commit_count: ${{ fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT || '1') }}
+
+@@ -95,4 +118,4 @@
+       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+
+       CODERABBIT_API_KEY: ${{ secrets.CODERABBIT_API_KEY }}
+
+-      WORKFLOW_PUSH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN }}
++      WORKFLOW_PUSH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN }}
+
+
+--- a/.github/workflows/coderabbit-pr-comment-trigger.yml
++++ b/.github/workflows/coderabbit-pr-comment-trigger.yml
+@@ -1,4 +1,34 @@
+ name: CodeRabbit PR comment trigger
+
++
+
++# Source asset for a starter workflow.
+
++# This canonical source file lives under templates/starter-workflows/ in the asset library.
+
++# The uses: target below is a publication-target shape for a serving repo, not a claim
+
++# that this source-library repo currently serves the reusable workflow at HEAD.
+
++# If you publish or copy it later, keep the pinned reusable-workflow uses ref and the
+
++# paired shared_repository_ref aligned.
+
++#
+
++# Setup notes after creating this workflow from the template:
+
++# 1. This workflow is intentionally scoped to comments authored by CodeRabbit only.
+
++# 2. Configure repository or organization variables as needed:
+
++#    - CODERABBIT_RUNNER_LABELS_JSON
+
++#    - CODERABBIT_AGENT_RUNTIME
+
++#    - CODERABBIT_AGENT_COMMAND_JSON or CODERABBIT_AGENT_COMMAND
+
++#    - CODERABBIT_CLI (optional)
+
++#    - CURSOR_CLI (optional)
+
++#    - CODERABBIT_INSTALL_SHARED_SKILLS (optional, default true)
+
++#    - CODERABBIT_INSTALL_CURSOR_RULES (optional, default true)
+
++#    - CODERABBIT_SHARED_SKILLS_INSTALL_MODE (optional, default copy)
+
++#    - CODERABBIT_AUTO_COMMIT (optional, default false)
+
++#    - CODERABBIT_AUTO_PUSH (optional, default false)
+
++#    - CODERABBIT_COMMIT_STRATEGY (optional, default single-commit)
+
++#    - CODERABBIT_COMMIT_COUNT_MODE (optional, default auto)
+
++#    - CODERABBIT_FIXED_COMMIT_COUNT (optional, default 1)
+
++#    - CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER (optional, default true)
+
++# 3. Configure repository or organization secrets as needed:
+
++#    - CURSOR_API_KEY when CODERABBIT_AGENT_RUNTIME=cursor
+
++#    - CODERABBIT_API_KEY only if you explicitly enable CodeRabbit CLI validation
+
++#    - WORKFLOW_PUSH_TOKEN when remediation may need to push changes under .github/workflows/
+
++# 4. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
+
+ 
+
+ permissions:
+
+   contents: write
+
+@@ -54,13 +84,13 @@
+   coderabbit-pr-automation-comment:
+
+     needs: resolve-pr-context
+
+     if: ${{ needs.resolve-pr-context.outputs.should_run == 'true' }}
+
+-    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@39a84b813769663a445cdeac62322ffd2ee8a435
+
++    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@743e51edf2385216507358e3f7fa285a318965d8
+
+     with:
+
+       pr_number: ${{ fromJSON(needs.resolve-pr-context.outputs.pr_number) }}
+
+       run_validation: false
+
+       working_tree_must_be_clean: true
+
+       max_cycles: 3
+
+-      shared_repository_ref: main
+
++      shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8
+
+       runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
+
+       agent_runtime: ${{ vars.CODERABBIT_AGENT_RUNTIME != '' && vars.CODERABBIT_AGENT_RUNTIME || 'none' }}
+
+       agent_command_json: ${{ vars.CODERABBIT_AGENT_COMMAND_JSON }}
+
+@@ -70,8 +100,8 @@
+       install_shared_skills: ${{ fromJSON(vars.CODERABBIT_INSTALL_SHARED_SKILLS || 'true') }}
+
+       install_cursor_rules: ${{ fromJSON(vars.CODERABBIT_INSTALL_CURSOR_RULES || 'true') }}
+
+       shared_skills_install_mode: ${{ vars.CODERABBIT_SHARED_SKILLS_INSTALL_MODE || 'copy' }}
+
+-      auto_commit: true
+
+-      auto_push: true
+
++      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'false') }}
+
++      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'false') }}
+
+       commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
+
+       commit_count_mode: ${{ vars.CODERABBIT_COMMIT_COUNT_MODE || 'auto' }}
+
+       fixed_commit_count: ${{ fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT || '1') }}
+
+@@ -80,4 +110,4 @@
+       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+
+       CODERABBIT_API_KEY: ${{ secrets.CODERABBIT_API_KEY }}
+
+-      WORKFLOW_PUSH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN }}
++      WORKFLOW_PUSH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN }}
+

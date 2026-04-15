@@ -41,7 +41,7 @@ Recommendation: adjudicate manually before any normalization PR is merged.
 
 Questions to answer in review:
 - Should this consumer remain on the older dynamic `shared_repository_ref` behavior, or be normalized to the current pinned shared-template model?
-- Should `WORKFLOW_PUSH_TOKEN` passthrough be adopted here, or intentionally remain absent?
+- Should `WORKFLOW_PUSH_TOKEN` passthrough be retained/required here, or intentionally omitted?
 - Should this consumer continue forcing `auto_commit` / `auto_push`, or should it inherit the newer shared starter-template defaults?
 
 Any proposed normalization patch in this PR is optional and should be treated as review material, not as an automatically approved overwrite.

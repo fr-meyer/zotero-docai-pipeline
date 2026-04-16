@@ -1,0 +1,47 @@
+--- a/.github/workflows/coderabbit-pr-automation-pr.yml
++++ b/.github/workflows/coderabbit-pr-automation-pr.yml
+@@ -38,10 +38,6 @@
+   pull_request:
+
+     types: [opened, synchronize, reopened]
+
+ 
+
+-concurrency:
+
+-  group: coderabbit-pr-automation-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+
+-  cancel-in-progress: true
+
+-
+
+ jobs:
+
+   coderabbit-pr-automation:
+
+     if: ${{ github.event.pull_request.head.repo.fork == false }}
+
+
+--- a/.github/workflows/coderabbit-pr-automation-manual.yml
++++ b/.github/workflows/coderabbit-pr-automation-manual.yml
+@@ -56,10 +56,6 @@
+         required: false
+
+         type: number
+
+         default: 3
+
+-
+
+-concurrency:
+
+-  group: coderabbit-pr-automation-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+
+-  cancel-in-progress: true
+
+ 
+
+ jobs:
+
+   resolve-pr-context:
+

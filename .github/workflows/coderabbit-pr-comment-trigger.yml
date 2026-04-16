@@ -31,7 +31,7 @@ name: CodeRabbit PR comment trigger
 # 4. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
   actions: read
   issues: read
@@ -102,6 +102,11 @@ jobs:
   coderabbit-pr-automation-comment:
     needs: resolve-pr-context
     if: ${{ needs.resolve-pr-context.outputs.should_run == 'true' }}
+    permissions:
+      contents: write
+      pull-requests: read
+      actions: read
+      issues: read
     uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@cec0072f25df02c22b7732059caddbff68c0fada
     with:
       pr_number: ${{ fromJSON(needs.resolve-pr-context.outputs.pr_number) }}

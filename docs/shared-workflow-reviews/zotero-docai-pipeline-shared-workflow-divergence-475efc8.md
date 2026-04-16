@@ -12,7 +12,7 @@ Compared these registered shared starter templates against the current consumer 
 ## 2. Verified diff facts
 
 ### `.github/workflows/coderabbit-pr-comment-trigger.yml`
-- Pinned reusable-workflow refs differ: current=['cec0072f25df02c22b7732059caddbff68c0fada'], candidate=['cec0072f25df02c22b7732059caddbff68c0fada'].
+- Pinned reusable-workflow refs are identical: both `current` and `candidate` resolve to `cec0072f25df02c22b7732059caddbff68c0fada`.
 
 ## 3. Interpretation
 
@@ -29,8 +29,8 @@ That does not prove the consumer is wrong. It means this case needs adjudication
 Recommendation: adjudicate manually before any normalization PR is merged.
 
 Questions to answer in review:
-- Should this consumer remain on the older dynamic `shared_repository_ref` behavior, or be normalized to the current pinned shared-template model?
-- Should `WORKFLOW_PUSH_TOKEN` passthrough be adopted here, or intentionally remain absent?
-- Should this consumer continue forcing `auto_commit` / `auto_push`, or should it inherit the newer shared starter-template defaults?
+- `shared_repository_ref` is pinned to a full commit SHA (not a dynamic ref) in `.github/workflows/coderabbit-pr-comment-trigger.yml`. Aside from bumping that pin when you intentionally adopt a newer shared workflow, does this consumer need any other change from the current pinned shared-template wiring?
+- `WORKFLOW_PUSH_TOKEN` is already passed through to the reusable workflow. Is any explicit override or different secret mapping required for this repository?
+- `auto_commit` and `auto_push` default to `false` via `vars.CODERABBIT_AUTO_COMMIT` and `vars.CODERABBIT_AUTO_PUSH`. Should this repository explicitly opt either into `true`, or keep the conservative defaults?
 
 Any proposed normalization patch in this PR is optional and should be treated as review material, not as an automatically approved overwrite.

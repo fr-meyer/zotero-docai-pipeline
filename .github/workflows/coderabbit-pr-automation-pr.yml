@@ -1,4 +1,4 @@
-name: CodeRabbit PR comment trigger
+name: CodeRabbit PR automation
 
 # Source asset for a starter workflow.
 # This canonical source file lives under templates/starter-workflows/ in the asset library.
@@ -8,8 +8,7 @@ name: CodeRabbit PR comment trigger
 # paired shared_repository_ref aligned.
 #
 # Setup notes after creating this workflow from the template:
-# 1. This workflow is intentionally scoped to comments authored by CodeRabbit only.
-# 2. Configure repository or organization variables as needed:
+# 1. Configure repository or organization variables as needed:
 #    - CODERABBIT_RUNNER_LABELS_JSON
 #    - CODERABBIT_AGENT_RUNTIME
 #    - CODERABBIT_AGENT_COMMAND_JSON or CODERABBIT_AGENT_COMMAND
@@ -24,69 +23,27 @@ name: CodeRabbit PR comment trigger
 #    - CODERABBIT_COMMIT_COUNT_MODE (optional, default auto)
 #    - CODERABBIT_FIXED_COMMIT_COUNT (optional, default 1)
 #    - CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER (optional, default true)
-# 3. Configure repository or organization secrets as needed:
+# 2. Configure repository or organization secrets as needed:
 #    - CURSOR_API_KEY when CODERABBIT_AGENT_RUNTIME=cursor
 #    - CODERABBIT_API_KEY only if you explicitly enable CodeRabbit CLI validation
 #    - WORKFLOW_PUSH_TOKEN when remediation may need to push changes under .github/workflows/
-# 4. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
+# 3. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
 
 permissions:
   contents: write
   pull-requests: read
   actions: read
-  issues: read
 
 on:
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
-
-concurrency:
-  group: coderabbit-pr-comment-${{ github.event.issue.number || github.event.pull_request.number }}
-  cancel-in-progress: true
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
-  resolve-pr-context:
-    if: ${{ startsWith(github.event.sender.login, 'coderabbitai') && ((github.event_name == 'issue_comment' && github.event.issue.pull_request) || github.event_name == 'pull_request_review_comment') }}
-    runs-on: ubuntu-latest
-    outputs:
-      should_run: ${{ steps.resolve.outputs.should_run }}
-      pr_number: ${{ steps.resolve.outputs.pr_number }}
-    steps:
-      - name: Resolve PR number and fork status
-        id: resolve
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          REVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-
-          if [[ "$EVENT_NAME" == "issue_comment" ]]; then
-            pr_number="$ISSUE_NUMBER"
-          else
-            pr_number="$REVIEW_PR_NUMBER"
-          fi
-
-          pr_json=$(gh api "repos/$REPOSITORY/pulls/$pr_number")
-          is_fork=$(jq -r '.head.repo.fork // false' <<<"$pr_json")
-
-          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
-          if [[ "$is_fork" == "true" ]]; then
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          fi
-
-  coderabbit-pr-automation-comment:
-    needs: resolve-pr-context
-    if: ${{ needs.resolve-pr-context.outputs.should_run == 'true' }}
+  coderabbit-pr-automation:
+    if: ${{ github.event.pull_request.head.repo.fork == false }}
     uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@cec0072f25df02c22b7732059caddbff68c0fada
     with:
-      pr_number: ${{ fromJSON(needs.resolve-pr-context.outputs.pr_number) }}
+      pr_number: ${{ github.event.pull_request.number }}
       run_validation: false
       working_tree_must_be_clean: true
       max_cycles: 3

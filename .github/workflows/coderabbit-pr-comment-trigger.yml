@@ -43,7 +43,7 @@ on:
     types: [created]
 
 concurrency:
-  group: coderabbit-pr-comment-${{ github.event.issue.number || github.event.pull_request.number }}
+  group: coderabbit-pr-automation-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:

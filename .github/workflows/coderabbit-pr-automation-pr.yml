@@ -38,6 +38,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+concurrency:
+  group: coderabbit-pr-automation-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   coderabbit-pr-automation:
     if: ${{ github.event.pull_request.head.repo.fork == false }}

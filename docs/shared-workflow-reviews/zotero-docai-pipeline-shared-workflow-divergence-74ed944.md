@@ -12,7 +12,7 @@ Compared these registered shared starter templates against the current consumer 
 ## 2. Verified diff facts
 
 ### `.github/workflows/coderabbit-pr-comment-trigger.yml`
-- Pinned reusable-workflow refs differ: current=['cec0072f25df02c22b7732059caddbff68c0fada'], candidate=['cec0072f25df02c22b7732059caddbff68c0fada'].
+- Pinned reusable-workflow refs are identical: current=['cec0072f25df02c22b7732059caddbff68c0fada'], candidate=['cec0072f25df02c22b7732059caddbff68c0fada'].
 
 ## 3. Interpretation
 

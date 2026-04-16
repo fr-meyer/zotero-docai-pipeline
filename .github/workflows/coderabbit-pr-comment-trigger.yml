@@ -48,7 +48,7 @@ concurrency:
 
 jobs:
   resolve-pr-context:
-    if: ${{ startsWith(github.event.sender.login, 'coderabbitai') && ((github.event_name == 'issue_comment' && github.event.issue.pull_request) || github.event_name == 'pull_request_review_comment') }}
+    if: ${{ github.event.sender.login == 'coderabbitai[bot]' && ((github.event_name == 'issue_comment' && github.event.issue.pull_request) || github.event_name == 'pull_request_review_comment') }}
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.resolve.outputs.should_run }}

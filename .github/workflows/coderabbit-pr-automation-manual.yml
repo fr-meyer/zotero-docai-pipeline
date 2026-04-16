@@ -58,10 +58,50 @@ on:
         default: 3
 
 jobs:
+  resolve-pr-context:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.resolve.outputs.should_run }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      fork_repo: ${{ steps.resolve.outputs.fork_repo }}
+    steps:
+      - name: Resolve PR fork status
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          pr_json=$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")
+          is_fork=$(jq -r '.head.repo.fork // false' <<<"$pr_json")
+          head_repo=$(jq -r '.head.repo.full_name // empty' <<<"$pr_json")
+
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "fork_repo=$head_repo" >> "$GITHUB_OUTPUT"
+          if [[ "$is_fork" == "true" ]]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  manual-fork-not-supported:
+    needs: resolve-pr-context
+    if: ${{ needs.resolve-pr-context.outputs.should_run != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail for fork PRs
+        run: |
+          echo "Manual CodeRabbit remediation does not run for fork PRs. PR #${{ needs.resolve-pr-context.outputs.pr_number }} comes from ${{ needs.resolve-pr-context.outputs.fork_repo }}." >&2
+          exit 1
+
   coderabbit-pr-automation:
+    needs: resolve-pr-context
+    if: ${{ needs.resolve-pr-context.outputs.should_run == 'true' }}
     uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@cec0072f25df02c22b7732059caddbff68c0fada
     with:
-      pr_number: ${{ fromJSON(inputs.pr_number) }}
+      pr_number: ${{ fromJSON(needs.resolve-pr-context.outputs.pr_number) }}
       run_validation: ${{ inputs.run_validation }}
       working_tree_must_be_clean: ${{ inputs.working_tree_must_be_clean }}
       max_cycles: ${{ fromJSON(inputs.max_cycles) }}

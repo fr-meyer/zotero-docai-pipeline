@@ -39,9 +39,9 @@
 
 +#    - CODERABBIT_SHARED_SKILLS_INSTALL_MODE (optional, default copy)
 
-+#    - CODERABBIT_AUTO_COMMIT (optional, default false)
++#    - CODERABBIT_AUTO_COMMIT (optional, default true)
 
-+#    - CODERABBIT_AUTO_PUSH (optional, default false)
++#    - CODERABBIT_AUTO_PUSH (optional, default true)
 
 +#    - CODERABBIT_COMMIT_STRATEGY (optional, default single-commit)
 
@@ -74,17 +74,16 @@
 
          default: 3
 
--      shared_repository_ref:
+       shared_repository_ref:
 
--        description: Branch, tag, or SHA of the shared toolkit workflow to use
+         description: Branch, tag, or SHA of the shared toolkit workflow to use
 
--        required: false
+         required: false
 
--        type: string
+         type: string
 
--        default: main
+         default: main
 
--
 
    pull_request:
 
@@ -112,9 +111,7 @@
 
        max_cycles: ${{ fromJSON(inputs.max_cycles) }}
 
--      shared_repository_ref: ${{ inputs.shared_repository_ref }}
-
-+      shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8
+       shared_repository_ref: ${{ inputs.shared_repository_ref }}
 
        runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
 
@@ -133,9 +130,9 @@
 
 -      auto_push: true
 
-+      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'false') }}
++      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'true') }}
 
-+      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'false') }}
++      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'true') }}
 
        commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
 
@@ -164,9 +161,7 @@
 
        max_cycles: 3
 
--      shared_repository_ref: main
-
-+      shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8
+       shared_repository_ref: main
 
        runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
 
@@ -185,9 +180,9 @@
 
 -      auto_push: true
 
-+      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'false') }}
++      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'true') }}
 
-+      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'false') }}
++      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'true') }}
 
        commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
 
@@ -249,9 +244,9 @@
 
 +#    - CODERABBIT_SHARED_SKILLS_INSTALL_MODE (optional, default copy)
 
-+#    - CODERABBIT_AUTO_COMMIT (optional, default false)
++#    - CODERABBIT_AUTO_COMMIT (optional, default true)
 
-+#    - CODERABBIT_AUTO_PUSH (optional, default false)
++#    - CODERABBIT_AUTO_PUSH (optional, default true)
 
 +#    - CODERABBIT_COMMIT_STRATEGY (optional, default single-commit)
 
@@ -298,9 +293,7 @@
 
        max_cycles: 3
 
--      shared_repository_ref: main
-
-+      shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8
+       shared_repository_ref: main
 
        runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
 
@@ -319,9 +312,9 @@
 
 -      auto_push: true
 
-+      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'false') }}
++      auto_commit: ${{ fromJSON(vars.CODERABBIT_AUTO_COMMIT || 'true') }}
 
-+      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'false') }}
++      auto_push: ${{ fromJSON(vars.CODERABBIT_AUTO_PUSH || 'true') }}
 
        commit_strategy: ${{ vars.CODERABBIT_COMMIT_STRATEGY || 'single-commit' }}
 

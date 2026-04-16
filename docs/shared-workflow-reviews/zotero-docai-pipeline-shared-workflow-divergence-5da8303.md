@@ -1,6 +1,6 @@
 # Shared workflow divergence review for `fr-meyer/zotero-docai-pipeline`
 
-Shared source: `fr-meyer/agent-toolkit` at `d479814e962081efd87430626eb9c5e6a75ebe60`
+Shared source: `fr-meyer/agent-toolkit` at `5da8303d99a063c9c279d647fc8630c3e0d45885`
 Target branch: `feature/package-cli-app`
 
 ## 1. Scope
@@ -13,17 +13,13 @@ Compared these registered shared starter templates against the current consumer 
 ## 2. Verified diff facts
 
 ### `.github/workflows/coderabbit-pr-automation.yml`
-- Pinned reusable-workflow refs differ: current=['39a84b813769663a445cdeac62322ffd2ee8a435'], candidate=['743e51edf2385216507358e3f7fa285a318965d8'].
-- Consumer file currently forces `auto_commit: true`, while the shared starter template defers to vars/default false.
-- Consumer file currently forces `auto_push: true`, while the shared starter template defers to vars/default false.
-- `shared_repository_ref` handling differs: current=['shared_repository_ref:', 'shared_repository_ref: ${{ inputs.shared_repository_ref }}', 'shared_repository_ref: main'], candidate=['shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8', 'shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8'].
+- Pinned reusable-workflow refs differ: current=['34849475c42f56cb75d2ceed4fdbcee0350cacb8'], candidate=['cec0072f25df02c22b7732059caddbff68c0fada'].
+- `shared_repository_ref` handling differs: current=['shared_repository_ref: 34849475c42f56cb75d2ceed4fdbcee0350cacb8', 'shared_repository_ref: 34849475c42f56cb75d2ceed4fdbcee0350cacb8'], candidate=['shared_repository_ref: cec0072f25df02c22b7732059caddbff68c0fada', 'shared_repository_ref: cec0072f25df02c22b7732059caddbff68c0fada'].
 - The input contract around `shared_repository_ref` differs between the consumer workflow and the shared starter template.
 
 ### `.github/workflows/coderabbit-pr-comment-trigger.yml`
-- Pinned reusable-workflow refs differ: current=['39a84b813769663a445cdeac62322ffd2ee8a435'], candidate=['743e51edf2385216507358e3f7fa285a318965d8'].
-- Consumer file currently forces `auto_commit: true`, while the shared starter template defers to vars/default false.
-- Consumer file currently forces `auto_push: true`, while the shared starter template defers to vars/default false.
-- `shared_repository_ref` handling differs: current=['shared_repository_ref: main'], candidate=['shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8'].
+- Pinned reusable-workflow refs differ: current=['34849475c42f56cb75d2ceed4fdbcee0350cacb8'], candidate=['cec0072f25df02c22b7732059caddbff68c0fada'].
+- `shared_repository_ref` handling differs: current=['shared_repository_ref: 34849475c42f56cb75d2ceed4fdbcee0350cacb8'], candidate=['shared_repository_ref: cec0072f25df02c22b7732059caddbff68c0fada'].
 
 ## 3. Interpretation
 
@@ -41,7 +37,7 @@ Recommendation: adjudicate manually before any normalization PR is merged.
 
 Questions to answer in review:
 - Should this consumer remain on the older dynamic `shared_repository_ref` behavior, or be normalized to the current pinned shared-template model?
-- Should `WORKFLOW_PUSH_TOKEN` passthrough be retained/required here, or intentionally omitted?
+- Should `WORKFLOW_PUSH_TOKEN` passthrough be adopted here, or intentionally remain absent?
 - Should this consumer continue forcing `auto_commit` / `auto_push`, or should it inherit the newer shared starter-template defaults?
 
 Any proposed normalization patch in this PR is optional and should be treated as review material, not as an automatically approved overwrite.

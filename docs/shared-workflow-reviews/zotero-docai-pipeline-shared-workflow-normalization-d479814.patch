@@ -82,7 +82,7 @@
 
          type: string
 
-         default: main
+         default: 743e51edf2385216507358e3f7fa285a318965d8
 
 
    pull_request:
@@ -161,7 +161,7 @@
 
        max_cycles: 3
 
-       shared_repository_ref: main
+       shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8
 
        runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
 
@@ -293,7 +293,7 @@
 
        max_cycles: 3
 
-       shared_repository_ref: main
+       shared_repository_ref: 743e51edf2385216507358e3f7fa285a318965d8
 
        runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
 

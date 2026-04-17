@@ -1,8 +1,9 @@
 # zotero-docai-pipeline
 
-![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/fr-meyer/zotero-docai-pipeline?utm_source=oss&utm_medium=github&utm_campaign=fr-meyer%2Fzotero-docai-pipeline&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 Automate PDF-to-Markdown extraction for Zotero attachments using OCR providers (PageIndex or Mistral). Results are saved as rich text Zotero notes ready for Notero/Notion sync, with optional hierarchical tree structure extraction.
 
@@ -10,6 +11,7 @@ Automate PDF-to-Markdown extraction for Zotero attachments using OCR providers (
 
 - [Quick Start](#quick-start)
 - [Installation](#installation)
+- [Runtime Prerequisites](#runtime-prerequisites)
 - [Configuration](#configuration)
 - [Item Selection & Tagging](#item-selection--tagging)
 - [Tag Adding](#tag-adding)
@@ -21,14 +23,16 @@ Automate PDF-to-Markdown extraction for Zotero attachments using OCR providers (
 
 ## Quick Start
 
-Complete the [Installation](#installation) steps first, then follow this workflow:
+Complete the [Installation](#installation) and [Runtime Prerequisites](#runtime-prerequisites) steps first, then follow this workflow:
 
 1. **Tag items in Zotero:**
    - Tag items you want to process with the configured include tag (default: `docai`)
 
 2. **Run the pipeline:**
    ```bash
-   python main.py ocr.enabled=true
+   zotero-docai-pipeline ocr.enabled=true
+   # or equivalently:
+   python -m zotero_docai_pipeline ocr.enabled=true
    ```
 
 3. **Verify results:**
@@ -39,7 +43,9 @@ Complete the [Installation](#installation) steps first, then follow this workflo
 
 Test your configuration without creating notes:
 ```bash
-python main.py processing.dry_run=true ocr.enabled=true
+zotero-docai-pipeline processing.dry_run=true ocr.enabled=true
+# or equivalently:
+python -m zotero_docai_pipeline processing.dry_run=true ocr.enabled=true
 ```
 
 Dry-run mode performs the full item-selection logic but **does not write any tags or notes** to Zotero. For every matched item the following details are logged:
@@ -56,33 +62,42 @@ A summary line is printed at the end showing the total matched items, total PDFs
 
 ## Installation
 
-### Prerequisites
+### Install the package
 
-- Zotero API access (API key and library ID)
-- API key for your chosen OCR provider:
-  - PageIndex API key (for PageIndex OCR)
-  - Mistral API key (for Mistral OCR)
+```bash
+pip install .        # standard install
+pip install -e .     # editable / development install
+```
 
-### Install Dependencies
+After installation, `zotero-docai-pipeline` is available on `PATH` and can be verified from any directory:
+```bash
+zotero-docai-pipeline --help
+```
 
-Using conda (recommended):
+### Optional: conda environment
+
+If you prefer using conda for dependency isolation:
 ```bash
 conda env create -f environment.yml
 conda activate zotero-docai-pipeline
+pip install .
 ```
 
 The `environment.yml` file includes all required dependencies: Python 3.8+, Hydra Core, PyZotero, Mistral AI SDK, PageIndex SDK, and markdown processing libraries.
 
-### API Key Configuration
+## Runtime Prerequisites
 
-Set the required environment variables:
+The following environment variables must be set **before running** the pipeline.
+
+### Zotero credentials (required)
 
 ```bash
 export ZOTERO_LIBRARY_ID="your-library-id"
 export ZOTERO_API_KEY="your-zotero-api-key"
 ```
 
-For OCR provider, set one of:
+### OCR provider key (at least one required)
+
 ```bash
 export PAGEINDEX_API_KEY="your-pageindex-api-key"  # For PageIndex OCR
 # or
@@ -90,8 +105,10 @@ export MISTRAL_API_KEY="your-mistral-api-key"      # For Mistral OCR
 ```
 
 **Provider Setup:**
-- **PageIndex:** Obtain API key from [PageIndex dashboard](https://docs.pageindex.ai). Optional SDK mode: install with `pip install pageindex` and set `use_sdk: true` in `conf/ocr/pageindex.yaml`
-- **Mistral:** Obtain API key from [Mistral platform](https://docs.mistral.ai)
+- **PageIndex:** Obtain API key from [PageIndex dashboard](https://docs.pageindex.ai). Optional SDK mode: install with `pip install pageindex` and set `use_sdk: true` in `zotero_docai_pipeline/conf/ocr/pageindex.yaml`.
+- **Mistral:** Obtain API key from [Mistral platform](https://docs.mistral.ai).
+
+> **Note:** Missing or invalid environment variables may cause the CLI to error before help text is shown. If you see unexpected errors on startup, verify your environment variables are set correctly.
 
 ## Configuration
 
@@ -116,9 +133,16 @@ The pipeline uses Hydra for configuration management. Most settings can be overr
 | `tagging.apply_on_error.values` | list | `[docai-error]` | Tags added to items on failed processing |
 | `tagging.include_abstract` | boolean | `false` | Include abstract in `paper_metadata` passed to OCR |
 | `zotero.error_tagging_enabled` | boolean | `true` | Whether error tags are applied on failure |
-| `download.upload_folder` | string | `./downloads` | Local directory for downloaded PDFs |
+| `download.upload_folder` | string | `./downloads` | Local directory for downloaded PDFs (must be set to an explicit path when `download.enabled=true`) |
 | `download.max_concurrent_downloads` | integer | `5` | Maximum number of concurrent downloads |
+| `storage.base_dir` | string | `./data/ocr_output` | Base directory for on-disk storage (must be set to an explicit path when `processing.save_to_disk=true`) |
 | `processing.cleanup_uploaded_files` | boolean | `false` | Controls file deletion after processing (default: false = keep files) |
+
+> **Explicit output paths required in path-consuming modes:**
+> - `download.enabled=true` requires an explicit `download.upload_folder` override.
+> - `processing.save_to_disk=true` requires an explicit `storage.base_dir` override.
+>
+> The packaged placeholder defaults are rejected; the CLI will exit with an actionable error if they are not overridden.
 
 ### Choosing an OCR Provider
 
@@ -138,16 +162,20 @@ The pipeline supports two OCR providers:
 Override configuration from the command line:
 ```bash
 # Change OCR provider
-python main.py ocr=pageindex ocr.enabled=true
+zotero-docai-pipeline ocr=pageindex ocr.enabled=true
+# or: python -m zotero_docai_pipeline ocr=pageindex ocr.enabled=true
 
 # Enable/disable tree extraction
-python main.py tree_structure.enabled=true ocr.enabled=true
+zotero-docai-pipeline tree_structure.enabled=true ocr.enabled=true
+# or: python -m zotero_docai_pipeline tree_structure.enabled=true ocr.enabled=true
 
 # Change extraction mode
-python main.py processing.extraction_mode=page_by_page ocr.enabled=true
+zotero-docai-pipeline processing.extraction_mode=page_by_page ocr.enabled=true
+# or: python -m zotero_docai_pipeline processing.extraction_mode=page_by_page ocr.enabled=true
 
 # Multiple overrides
-python main.py ocr=pageindex tree_structure.enabled=true processing.dry_run=true ocr.enabled=true
+zotero-docai-pipeline ocr=pageindex tree_structure.enabled=true processing.dry_run=true ocr.enabled=true
+# or: python -m zotero_docai_pipeline ocr=pageindex tree_structure.enabled=true processing.dry_run=true ocr.enabled=true
 ```
 
 ## Item Selection & Tagging
@@ -190,7 +218,7 @@ Each processed item's entry in `processing_summary.json` contains a nested **`pa
 
 ### Default Configuration
 
-The full default tagging configuration (`conf/tagging/default.yaml`):
+The full default tagging configuration (`zotero_docai_pipeline/conf/tagging/default.yaml`):
 
 ```yaml
 # Tagging workflow configuration
@@ -221,7 +249,8 @@ include_abstract: false
 Override tagging settings from the command line:
 
 ```bash
-python main.py "tagging.selection.include.values=[my-tag]"
+zotero-docai-pipeline "tagging.selection.include.values=[my-tag]"
+# or: python -m zotero_docai_pipeline "tagging.selection.include.values=[my-tag]"
 ```
 
 ## Tag Adding
@@ -245,7 +274,8 @@ Optional step that applies Zotero tags to items by matching their **citation key
 Example:
 ```bash
 export TAG_ADDING_ASSIGNMENTS_JSON='{"Smith2020":["docai-tag1","docai-tag2"]}'
-python main.py tag_adding.enabled=true
+zotero-docai-pipeline tag_adding.enabled=true
+# or: python -m zotero_docai_pipeline tag_adding.enabled=true
 ```
 
 ## PDF Download
@@ -254,23 +284,25 @@ Optional step that downloads PDFs from Zotero items to local disk (used as an in
 
 ### Key configuration
 - `download.enabled`: set to `true` to enable PDF downloads.
-- `download.upload_folder`: local directory for downloaded PDFs (default: `./downloads`).
+- `download.upload_folder`: local directory for downloaded PDFs (must be overridden with an explicit path when `download.enabled=true`).
 - `download.preserve_filenames`: whether to preserve the original PDF filenames (default: `true`).
 - `download.create_subfolders`: whether to create subfolders under `upload_folder` (default: `false`).
 - `download.skip_existing`: whether to skip PDFs that already exist locally (default: `true`).
 - `download.max_concurrent_downloads`: maximum number of concurrent downloads (default: `5`).
-- Retry is configurable via `download.retry.*` (see `conf/download/default.yaml`).
+- Retry is configurable via `download.retry.*` (see `zotero_docai_pipeline/conf/download/default.yaml`).
 
 ### Important constraint
 - `processing.dry_run=true` cannot be combined with `download.enabled=true`.
 
 Examples:
 ```bash
-# Download-only
-python main.py download.enabled=true
+# Download-only (explicit output path required)
+zotero-docai-pipeline download.enabled=true download.upload_folder=/path/to/downloads
+# or: python -m zotero_docai_pipeline download.enabled=true download.upload_folder=/path/to/downloads
 
 # Download + OCR
-python main.py download.enabled=true ocr.enabled=true
+zotero-docai-pipeline download.enabled=true download.upload_folder=/path/to/downloads ocr.enabled=true
+# or: python -m zotero_docai_pipeline download.enabled=true download.upload_folder=/path/to/downloads ocr.enabled=true
 ```
 
 ## Extraction Modes
@@ -291,7 +323,7 @@ Common issues and solutions when running the pipeline:
 
 ### API Key and Tree Extraction Issues
 
-**API keys**: Ensure the correct environment variable is set (see [Installation](#installation)):
+**API keys**: Ensure the correct environment variable is set (see [Runtime Prerequisites](#runtime-prerequisites)):
 - `PAGEINDEX_API_KEY` for PageIndex OCR
 - `MISTRAL_API_KEY` for Mistral OCR
 

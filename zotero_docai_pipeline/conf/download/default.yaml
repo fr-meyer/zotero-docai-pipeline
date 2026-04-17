@@ -5,9 +5,6 @@
 # Default: false for backward compatibility
 enabled: false
 
-# Local directory path where downloaded PDFs will be saved
-upload_folder: "./downloads"
-
 # Whether to preserve original PDF filenames
 # When false, files are renamed based on Zotero item metadata
 preserve_filenames: true

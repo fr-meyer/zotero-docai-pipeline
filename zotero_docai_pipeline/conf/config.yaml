@@ -11,10 +11,8 @@ defaults:
 
 # Hydra runtime configuration
 hydra:
-  run:
-    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
   job:
-    chdir: true
+    chdir: false
 
 zotero:
   library_id: "${oc.env:ZOTERO_LIBRARY_ID}"

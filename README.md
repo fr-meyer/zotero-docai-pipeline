@@ -133,9 +133,9 @@ The pipeline uses Hydra for configuration management. Most settings can be overr
 | `tagging.apply_on_error.values` | list | `[docai-error]` | Tags added to items on failed processing |
 | `tagging.include_abstract` | boolean | `false` | Include abstract in `paper_metadata` passed to OCR |
 | `zotero.error_tagging_enabled` | boolean | `true` | Whether error tags are applied on failure |
-| `download.upload_folder` | string | `./downloads` | Local directory for downloaded PDFs (must be set to an explicit path when `download.enabled=true`) |
+| `download.upload_folder` | string | — | Example: `./downloads`. Must be set to an explicit path when `download.enabled=true` (packaged placeholders are rejected). |
 | `download.max_concurrent_downloads` | integer | `5` | Maximum number of concurrent downloads |
-| `storage.base_dir` | string | `./data/ocr_output` | Base directory for on-disk storage (must be set to an explicit path when `processing.save_to_disk=true`) |
+| `storage.base_dir` | string | — | Example: `./data/ocr_output`. Must be set to an explicit path when `processing.save_to_disk=true` (packaged placeholders are rejected). |
 | `processing.cleanup_uploaded_files` | boolean | `false` | Controls file deletion after processing (default: false = keep files) |
 
 > **Explicit output paths required in path-consuming modes:**

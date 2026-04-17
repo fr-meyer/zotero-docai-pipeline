@@ -12,8 +12,8 @@ Compared these registered shared starter templates against the current consumer 
 ## 2. Verified diff facts
 
 ### `.github/workflows/coderabbit-pr-comment-trigger.yml`
-- Pinned reusable-workflow refs differ: current=['34849475c42f56cb75d2ceed4fdbcee0350cacb8'], candidate=['cec0072f25df02c22b7732059caddbff68c0fada'].
-- `shared_repository_ref` handling differs: current=['shared_repository_ref: 34849475c42f56cb75d2ceed4fdbcee0350cacb8'], candidate=['shared_repository_ref: cec0072f25df02c22b7732059caddbff68c0fada'].
+- Pinned reusable-workflow refs (consumer): `74ed944bc852e9446f076223659733d18b5f8f96` for `uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@...` and matching `shared_repository_ref: 74ed944bc852e9446f076223659733d18b5f8f96`.
+- Prior review artifacts referenced older hashes (`34849475…`, `cec0072f…`, etc.); the committed workflows in this branch align on the pin above.
 
 ## 3. Interpretation
 

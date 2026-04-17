@@ -69,6 +69,7 @@ jobs:
       should_run: ${{ steps.resolve.outputs.should_run }}
       pr_number: ${{ steps.resolve.outputs.pr_number }}
       fork_repo: ${{ steps.resolve.outputs.fork_repo }}
+      is_fork: ${{ steps.resolve.outputs.is_fork }}
     steps:
       - name: Resolve PR fork status
         id: resolve
@@ -85,6 +86,7 @@ jobs:
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "fork_repo=$head_repo" >> "$GITHUB_OUTPUT"
+          echo "is_fork=${is_fork:-false}" >> "$GITHUB_OUTPUT"
           if [[ "$is_fork" == "true" ]]; then
             echo "should_run=false" >> "$GITHUB_OUTPUT"
           else
@@ -93,7 +95,7 @@ jobs:
 
   manual-fork-not-supported:
     needs: resolve-pr-context
-    if: ${{ needs.resolve-pr-context.outputs.should_run != 'true' }}
+    if: ${{ needs.resolve-pr-context.result == 'success' && needs.resolve-pr-context.outputs.is_fork == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

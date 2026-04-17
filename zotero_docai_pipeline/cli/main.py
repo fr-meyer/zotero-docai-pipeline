@@ -478,7 +478,7 @@ overrides; the packaged placeholder defaults are not accepted.
 
 
 @hydra.main(
-    config_path="pkg://zotero_docai_pipeline.conf",
+    config_path="../conf",
     config_name="config",
     version_base=None,
 )

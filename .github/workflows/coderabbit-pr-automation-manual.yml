@@ -58,7 +58,7 @@ on:
         default: 3
 
 concurrency:
-  group: coderabbit-pr-automation-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  group: coderabbit-pr-automation-${{ inputs.pr_number || github.run_id }}
   cancel-in-progress: true
 
 jobs:

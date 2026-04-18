@@ -26,8 +26,9 @@ name: CodeRabbit PR automation
 # 2. Configure repository or organization secrets as needed:
 #    - CURSOR_API_KEY when CODERABBIT_AGENT_RUNTIME=cursor
 #    - CODERABBIT_API_KEY only if you explicitly enable CodeRabbit CLI validation
-#    - WORKFLOW_PUSH_TOKEN when remediation may need to push changes under .github/workflows/
-# 3. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
+#    - ELEVATED_GITHUB_TOKEN when default GitHub permissions are not enough, for example for cross-repo access or privileged writes
+# 3. The reusable workflow uses the built-in GITHUB_TOKEN by default.
+#    Configure ELEVATED_GITHUB_TOKEN only when default GitHub permissions are not enough.
 
 permissions:
   contents: write
@@ -37,10 +38,6 @@ permissions:
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-
-concurrency:
-  group: coderabbit-pr-automation-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
-  cancel-in-progress: true
 
 jobs:
   coderabbit-pr-automation:
@@ -68,7 +65,6 @@ jobs:
       fixed_commit_count: ${{ fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT || '1') }}
       stop_on_ambiguous_remainder: ${{ fromJSON(vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER || 'true') }}
     secrets:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       CODERABBIT_API_KEY: ${{ secrets.CODERABBIT_API_KEY }}
-      WORKFLOW_PUSH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN }}
+      ELEVATED_GITHUB_TOKEN: ${{ secrets.ELEVATED_GITHUB_TOKEN }}

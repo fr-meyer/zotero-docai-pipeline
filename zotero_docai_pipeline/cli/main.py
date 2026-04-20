@@ -116,24 +116,19 @@ def initialize_clients(
 def validate_tree_config(cfg: AppConfig) -> None:
     """Validate tree structure configuration requirements.
 
-    Ensures that when tree structure extraction is enabled, the configuration
-    meets all requirements:
-    - PageIndex API credentials must be available (either from OCR config if provider
-      is PageIndex, or from a separate tree provider configuration)
+    When ``cfg.tree_structure.enabled`` is True, checks whether PageIndex API
+    credentials are present when ``cfg.ocr`` is a ``PageIndexOCRConfig`` (via
+    ``cfg.ocr.api_key``). If the key is missing, this function logs a debug
+    message only; it does not raise. ``initialize_tree_processor`` performs
+    real credential resolution and returns ``None`` when credentials are
+    unavailable, so tree processing is skipped later in the pipeline.
 
-    This validation is called after config conversion but before client initialization
-    to catch configuration errors early. Validation is skipped entirely when
-    processing.dry_run is True since dry-run mode doesn't initialize tree components.
-
-    Note: Tree structure extraction can work with any OCR provider (e.g., Mistral)
-    as long as PageIndex API credentials are available for tree processing.
+    This validation is called after config conversion but before client
+    initialization. It is skipped when ``processing.dry_run`` is True because
+    dry-run mode does not initialize tree components.
 
     Args:
         cfg: Application configuration object
-
-    Raises:
-        ConfigError: If tree structure is enabled but requirements are not met.
-            Error messages include actionable guidance for fixing the configuration.
     """
     logger = logging.getLogger(__name__)
     logger.debug("Validating tree structure configuration")
@@ -482,18 +477,21 @@ overrides; the packaged placeholder defaults are not accepted.
     config_name="config",
     version_base=None,
 )
-def main(cfg: DictConfig) -> int:
+def main(cfg: DictConfig) -> None:
     """Main entry point for the pipeline.
 
     Args:
         cfg: Hydra configuration object
 
-    Returns:
-        Exit code: 0 for success, 1 for partial failure, 2 for complete failure,
-        3 for configuration / fatal error
+    Note:
+        Hydra's ``@hydra.main`` does not propagate return values to the process
+        exit status, so this function finishes by calling :func:`sys.exit` with
+        the intended code (0 for success; 1 or 2 from commands; 3 for
+        configuration or fatal errors).
     """
     logger = setup_logging()
 
+    exit_code = 3
     try:
         app_cfg = build_app_config(cfg)
 
@@ -504,83 +502,83 @@ def main(cfg: DictConfig) -> int:
             and not app_cfg.tag_adding.enabled
         ):
             print(_HELP_TEXT)
-            return 0
-
-        # --- Fail-fast path enforcement for download mode ---
-        if (
-            app_cfg.download.enabled
-            and app_cfg.download.upload_folder.strip()
-            == PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER
-        ):
-            raise ConfigError(
-                "download.upload_folder must be set to an explicit path when "
-                f"download.enabled=true. The packaged default "
-                f"{PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER!r} is not accepted. "
-                "Override with: download.upload_folder=/your/path"
-            )
-
-        # --- Fail-fast path enforcement for save-to-disk mode ---
-        if (
-            app_cfg.processing.save_to_disk
-            and app_cfg.storage.base_dir.strip()
-            == PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR
-        ):
-            raise ConfigError(
-                "storage.base_dir must be set to an explicit path when "
-                "processing.save_to_disk=true. The packaged default "
-                f"{PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR!r} is not accepted. "
-                "Override with: "
-                "storage.base_dir=/your/path"
-            )
-
-        # Validate flag compatibility (dry_run vs download, etc.)
-        validate_flags(app_cfg)
-
-        # Route to appropriate command
-        if app_cfg.processing.dry_run:
-            logger.info("Initializing Zotero client...")
-            zotero_client = ZoteroClient(app_cfg.zotero)
-            logger.info("Zotero client initialized successfully")
-            exit_code = dry_run_command(app_cfg, logger, zotero_client)
+            exit_code = 0
         else:
-            zotero_client, ocr_client = initialize_clients(app_cfg, logger)
-
-            tree_processor: TreeStructureProcessor | None = None
-            if app_cfg.ocr.enabled:
-                validate_tree_config(app_cfg)
-                tree_processor = initialize_tree_processor(app_cfg, logger)
-
-            if app_cfg.ocr.enabled:
-                if tree_processor is not None:
-                    logger.info("Tree structure processing enabled")
-                elif app_cfg.tree_structure.enabled:
-                    logger.warning(
-                        "Tree structure processing requested but could not be initialized"
-                    )
-                else:
-                    logger.debug("Tree structure processing disabled")
-            else:
-                logger.debug(
-                    "Tree structure processing skipped (OCR disabled; "
-                    "matches download-only / tag-only pipeline paths)"
+            # --- Fail-fast path enforcement for download mode ---
+            if (
+                app_cfg.download.enabled
+                and app_cfg.download.upload_folder.strip()
+                == PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER
+            ):
+                raise ConfigError(
+                    "download.upload_folder must be set to an explicit path when "
+                    f"download.enabled=true. The packaged default "
+                    f"{PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER!r} is not accepted. "
+                    "Override with: download.upload_folder=/your/path"
                 )
 
-            exit_code = process_command(
-                app_cfg, logger, zotero_client, ocr_client, tree_processor
-            )
+            # --- Fail-fast path enforcement for save-to-disk mode ---
+            if (
+                app_cfg.processing.save_to_disk
+                and app_cfg.storage.base_dir.strip()
+                == PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR
+            ):
+                raise ConfigError(
+                    "storage.base_dir must be set to an explicit path when "
+                    "processing.save_to_disk=true. The packaged default "
+                    f"{PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR!r} is not accepted. "
+                    "Override with: "
+                    "storage.base_dir=/your/path"
+                )
 
-        return exit_code
+            # Validate flag compatibility (dry_run vs download, etc.)
+            validate_flags(app_cfg)
+
+            # Route to appropriate command
+            if app_cfg.processing.dry_run:
+                logger.info("Initializing Zotero client...")
+                zotero_client = ZoteroClient(app_cfg.zotero)
+                logger.info("Zotero client initialized successfully")
+                exit_code = dry_run_command(app_cfg, logger, zotero_client)
+            else:
+                zotero_client, ocr_client = initialize_clients(app_cfg, logger)
+
+                tree_processor: TreeStructureProcessor | None = None
+                if app_cfg.ocr.enabled:
+                    validate_tree_config(app_cfg)
+                    tree_processor = initialize_tree_processor(app_cfg, logger)
+
+                if app_cfg.ocr.enabled:
+                    if tree_processor is not None:
+                        logger.info("Tree structure processing enabled")
+                    elif app_cfg.tree_structure.enabled:
+                        logger.warning(
+                            "Tree structure processing requested but could not be initialized"
+                        )
+                    else:
+                        logger.debug("Tree structure processing disabled")
+                else:
+                    logger.debug(
+                        "Tree structure processing skipped (OCR disabled; "
+                        "matches download-only / tag-only pipeline paths)"
+                    )
+
+                exit_code = process_command(
+                    app_cfg, logger, zotero_client, ocr_client, tree_processor
+                )
 
     except ConfigError as e:
         logger.error(f"Configuration error: {e}")
-        return 3
+        exit_code = 3
     except (ZoteroClientError, OCRClientError) as e:
         logger.error(f"Fatal error: {e}", exc_info=True)
-        return 3
+        exit_code = 3
     except Exception as e:
         logger.error(f"Fatal error: {e}", exc_info=True)
-        return 3
+        exit_code = 3
+
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
-    sys.exit(main())  # type: ignore[call-arg]
+    main()

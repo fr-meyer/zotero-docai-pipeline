@@ -31,7 +31,7 @@ name: CodeRabbit PR automation (manual)
 #    Configure ELEVATED_GITHUB_TOKEN only when default GitHub permissions are not enough.
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
   actions: read
 
@@ -106,6 +106,10 @@ jobs:
   coderabbit-pr-automation:
     needs: resolve-pr-context
     if: ${{ needs.resolve-pr-context.outputs.should_run == 'true' }}
+    permissions:
+      contents: write
+      pull-requests: read
+      actions: read
     uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@871a65bd186da8bf3f574b3019d42b89b2141d1c
     with:
       pr_number: ${{ fromJSON(needs.resolve-pr-context.outputs.pr_number) }}

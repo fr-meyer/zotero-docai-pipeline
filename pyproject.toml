@@ -29,9 +29,11 @@ classifiers = [
 ]
 dependencies = [
     "pyzotero",
-    "mistralai",
+    "mistralai<2",
     "tabulate",
     "pageindex",
+    "markdown-it-py",
+    "mdit-py-plugins",
     "hydra-core>=1.3.0",
     "omegaconf",
 ]

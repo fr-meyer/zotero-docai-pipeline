@@ -399,11 +399,11 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
 
     # Construct TaggingConfig from nested DictConfig
     include_rule = TagRuleConfig(
-        values=list(cfg.tagging.selection.include.values),
+        values=list(cfg.tagging.selection.include["values"]),
         operator=cfg.tagging.selection.include.operator,
     )
     exclude_rule = TagRuleConfig(
-        values=list(cfg.tagging.selection.exclude.values),
+        values=list(cfg.tagging.selection.exclude["values"]),
         operator=cfg.tagging.selection.exclude.operator,
     )
     selection_cfg = TagSelectionConfig(
@@ -412,10 +412,10 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
         conflict_resolution=cfg.tagging.selection.conflict_resolution,
     )
     success_target = TagTargetConfig(
-        values=list(cfg.tagging.apply_on_success.values),
+        values=list(cfg.tagging.apply_on_success["values"]),
     )
     error_target = TagTargetConfig(
-        values=list(cfg.tagging.apply_on_error.values),
+        values=list(cfg.tagging.apply_on_error["values"]),
     )
     tagging_config = TaggingConfig(
         selection=selection_cfg,

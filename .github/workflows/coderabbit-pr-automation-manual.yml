@@ -26,8 +26,9 @@ name: CodeRabbit PR automation (manual)
 # 2. Configure repository or organization secrets as needed:
 #    - CURSOR_API_KEY when CODERABBIT_AGENT_RUNTIME=cursor
 #    - CODERABBIT_API_KEY only if you explicitly enable CodeRabbit CLI validation
-#    - WORKFLOW_PUSH_TOKEN when remediation may need to push changes under .github/workflows/
-# 3. The reusable workflow uses GITHUB_TOKEN as GH_TOKEN by default.
+#    - ELEVATED_GITHUB_TOKEN when default GitHub permissions are not enough, for example for cross-repo access or privileged writes
+# 3. The reusable workflow uses the built-in GITHUB_TOKEN by default.
+#    Configure ELEVATED_GITHUB_TOKEN only when default GitHub permissions are not enough.
 
 permissions:
   contents: write
@@ -69,12 +70,11 @@ jobs:
       should_run: ${{ steps.resolve.outputs.should_run }}
       pr_number: ${{ steps.resolve.outputs.pr_number }}
       fork_repo: ${{ steps.resolve.outputs.fork_repo }}
-      is_fork: ${{ steps.resolve.outputs.is_fork }}
     steps:
       - name: Resolve PR fork status
         id: resolve
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ inputs.pr_number }}
         run: |
@@ -86,7 +86,6 @@ jobs:
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "fork_repo=$head_repo" >> "$GITHUB_OUTPUT"
-          echo "is_fork=${is_fork:-false}" >> "$GITHUB_OUTPUT"
           if [[ "$is_fork" == "true" ]]; then
             echo "should_run=false" >> "$GITHUB_OUTPUT"
           else
@@ -95,7 +94,7 @@ jobs:
 
   manual-fork-not-supported:
     needs: resolve-pr-context
-    if: ${{ needs.resolve-pr-context.result == 'success' && needs.resolve-pr-context.outputs.is_fork == 'true' }}
+    if: ${{ needs.resolve-pr-context.outputs.should_run != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -130,7 +129,6 @@ jobs:
       fixed_commit_count: ${{ fromJSON(vars.CODERABBIT_FIXED_COMMIT_COUNT || '1') }}
       stop_on_ambiguous_remainder: ${{ fromJSON(vars.CODERABBIT_STOP_ON_AMBIGUOUS_REMAINDER || 'true') }}
     secrets:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       CODERABBIT_API_KEY: ${{ secrets.CODERABBIT_API_KEY }}
-      WORKFLOW_PUSH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN }}
+      ELEVATED_GITHUB_TOKEN: ${{ secrets.ELEVATED_GITHUB_TOKEN }}

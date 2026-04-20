@@ -4,8 +4,10 @@
 
 # Core dependencies (pip packages from environment.yml)
 pyzotero
-mistralai
+mistralai<2
 tabulate
 pageindex
+markdown-it-py
+mdit-py-plugins
 hydra-core
 omegaconf

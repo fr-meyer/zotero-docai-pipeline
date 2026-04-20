@@ -10,7 +10,6 @@ support for configuration values.
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Literal
 
 from hydra.core.config_store import ConfigStore
 
@@ -37,7 +36,7 @@ class TagRuleConfig:
     values: list[str] = field(default_factory=list)
     """Tag values to match against."""
 
-    operator: Literal["and", "or"] = "or"
+    operator: str = "or"
     """Logical operator for combining tag matches."""
 
 
@@ -53,7 +52,7 @@ class TagSelectionConfig:
     exclude: TagRuleConfig = field(default_factory=TagRuleConfig)
     """Rule for tags that must not be present on an item."""
 
-    conflict_resolution: Literal["exclude_wins", "include_wins"] = "exclude_wins"
+    conflict_resolution: str = "exclude_wins"
     """How to resolve when an item matches both include and exclude rules."""
 
 

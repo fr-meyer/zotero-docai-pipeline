@@ -24,6 +24,12 @@ class ConfigError(Exception):
     """
 
 
+PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER = "__PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER__"
+PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR = "__PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR__"
+
+_configs_registered = False
+
+
 @dataclass
 class TagRuleConfig:
     """Configuration for a single tag-matching rule."""
@@ -385,7 +391,7 @@ class DownloadConfig:
     """Whether PDF download feature is enabled. Default False for backward
     compatibility."""
 
-    upload_folder: str = "./downloads"
+    upload_folder: str = PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER
     """Local directory path where downloaded PDFs will be saved."""
 
     preserve_filenames: bool = True
@@ -672,7 +678,7 @@ class StorageConfig:
     All storage is optional and can be disabled for production use.
     """
 
-    base_dir: str = "./data/ocr_output"
+    base_dir: str = PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR
     """Root directory for optional disk storage. Created automatically if
     it doesn't exist."""
 
@@ -724,6 +730,10 @@ def register_configs() -> None:
     This function must be called before Hydra initializes to enable type-safe
     configuration validation and IDE autocomplete support.
     """
+    global _configs_registered
+    if _configs_registered:
+        return
+
     cs = ConfigStore.instance()
 
     # Register config groups with names matching YAML defaults
@@ -744,3 +754,4 @@ def register_configs() -> None:
 
     # Register top-level config
     cs.store(name="config", node=AppConfig)
+    _configs_registered = True

@@ -1,0 +1,1 @@
+recursive-include zotero_docai_pipeline/conf *.yaml

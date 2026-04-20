@@ -371,7 +371,7 @@ def process_command(
     cfg: AppConfig,
     logger: logging.Logger,
     zotero_client: ZoteroClient,
-    ocr_client: OCRClient,
+    ocr_client: OCRClient | None,
     tree_processor: TreeStructureProcessor | None = None,
 ) -> int:
     """Execute the full pipeline processing workflow.
@@ -385,7 +385,7 @@ def process_command(
         cfg: Application configuration object
         logger: Logger instance for logging messages
         zotero_client: Initialized Zotero client instance
-        ocr_client: Initialized OCR client instance
+        ocr_client: OCR client when ``cfg.ocr.enabled``; otherwise None
         tree_processor: Optional tree structure processor instance
 
     Returns:

@@ -42,13 +42,13 @@ on:
 jobs:
   coderabbit-pr-automation:
     if: ${{ github.event.pull_request.head.repo.fork == false }}
-    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@74ed944bc852e9446f076223659733d18b5f8f96
+    uses: fr-meyer/agent-toolkit/.github/workflows/coderabbit-pr-automation.yml@871a65bd186da8bf3f574b3019d42b89b2141d1c
     with:
       pr_number: ${{ github.event.pull_request.number }}
       run_validation: false
       working_tree_must_be_clean: true
       max_cycles: 3
-      shared_repository_ref: 74ed944bc852e9446f076223659733d18b5f8f96
+      shared_repository_ref: 871a65bd186da8bf3f574b3019d42b89b2141d1c
       runner_labels_json: ${{ vars.CODERABBIT_RUNNER_LABELS_JSON != '' && vars.CODERABBIT_RUNNER_LABELS_JSON || '["self-hosted"]' }}
       agent_runtime: ${{ vars.CODERABBIT_AGENT_RUNTIME != '' && vars.CODERABBIT_AGENT_RUNTIME || 'none' }}
       agent_command_json: ${{ vars.CODERABBIT_AGENT_COMMAND_JSON }}

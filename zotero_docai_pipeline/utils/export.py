@@ -14,6 +14,8 @@ from zotero_docai_pipeline.domain.models import (
     DiscoveredItem,
 )
 
+_logger = logging.getLogger(__name__)
+
 
 def build_export_records(
     items: list[DiscoveredItem],
@@ -93,7 +95,6 @@ def log_export_records(
 def write_manifest(
     records: list[DiscoveredAttachmentExportRecord],
     manifest_path: str,
-    logger: logging.Logger,
 ) -> None:
     """Write export records to a UTF-8 JSON manifest file."""
     path = Path(manifest_path)
@@ -103,6 +104,6 @@ def write_manifest(
         json.dumps(data, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    logger.info(
+    _logger.info(
         f"Manifest written to {manifest_path} ({len(records)} records)."
     )

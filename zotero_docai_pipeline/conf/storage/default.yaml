@@ -1,3 +1,7 @@
+defaults:
+  - base_default
+  - _self_
+
 # Storage configuration for optional disk features
 save_pdfs: false
 save_manifests: true

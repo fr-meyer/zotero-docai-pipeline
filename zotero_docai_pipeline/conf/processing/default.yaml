@@ -1,3 +1,7 @@
+defaults:
+  - base_default
+  - _self_
+
 # Processing behavior configuration
 dry_run: false
 batch_size: 50

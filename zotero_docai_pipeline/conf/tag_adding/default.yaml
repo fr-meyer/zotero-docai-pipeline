@@ -1,3 +1,7 @@
+defaults:
+  - base_default
+  - _self_
+
 # Tag Adding feature configuration
 # Controls whether and how tags are applied to matched Zotero items
 

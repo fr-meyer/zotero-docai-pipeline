@@ -1,3 +1,7 @@
+defaults:
+  - base_default
+  - _self_
+
 # Tree structure processing configuration
 # Controls whether and how document tree structures are extracted and saved
 

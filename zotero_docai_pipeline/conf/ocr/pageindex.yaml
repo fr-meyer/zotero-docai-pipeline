@@ -1,3 +1,7 @@
+defaults:
+  - base_pageindex
+  - _self_
+
 # PageIndex OCR configuration
 # This file defines default values for PageIndexOCRConfig
 # Values can be overridden via command line or config overrides
@@ -8,7 +12,7 @@ provider: pageindex
 enabled: false
 
 # API configuration
-api_key: ${oc.env:PAGEINDEX_API_KEY,}
+api_key: ${oc.env:PAGEINDEX_API_KEY,""}
 # Base URL for PageIndex API
 base_url: "https://api.pageindex.ai"
 

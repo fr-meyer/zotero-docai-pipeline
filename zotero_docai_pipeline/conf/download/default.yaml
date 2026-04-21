@@ -1,3 +1,7 @@
+defaults:
+  - base_default
+  - _self_
+
 # PDF download feature configuration
 # Controls whether and how PDFs are downloaded from Zotero items
 

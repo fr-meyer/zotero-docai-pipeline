@@ -1,0 +1,108 @@
+"""Helpers for building and exporting discovered attachment URL records."""
+
+from __future__ import annotations
+
+import json
+import logging
+from datetime import datetime, timezone
+from pathlib import Path
+
+from zotero_docai_pipeline.clients.zotero_client import ZoteroClient
+from zotero_docai_pipeline.domain.config import ExportConfig
+from zotero_docai_pipeline.domain.models import (
+    DiscoveredAttachmentExportRecord,
+    DiscoveredItem,
+)
+
+
+def build_export_records(
+    items: list[DiscoveredItem],
+    zotero_client: ZoteroClient,
+    export_cfg: ExportConfig,
+) -> list[DiscoveredAttachmentExportRecord]:
+    """Build export rows for PDF attachments on the given discovered items."""
+    discovered_at = datetime.now(timezone.utc).isoformat()
+    library_id = zotero_client.config.library_id
+    library_type = "user"
+
+    records: list[DiscoveredAttachmentExportRecord] = []
+    for item in items:
+        for attachment in item.attachments:
+            if not ZoteroClient._is_pdf_attachment(
+                attachment.content_type, attachment.filename
+            ):
+                continue
+            if not attachment.key:
+                raise ValueError(
+                    f"Attachment has no Zotero key (item_key={item.key!r}, "
+                    f"filename={attachment.filename!r})"
+                )
+
+            zotero_uri_web = f"https://www.zotero.org/users/{library_id}/items/{item.key}"
+            zotero_uri = zotero_uri_web
+            zotero_uri_select = f"zotero://select/library/items/{item.key}"
+            zotero_file_url = zotero_client.build_attachment_file_url(
+                attachment.key, library_type
+            )
+
+            records.append(
+                DiscoveredAttachmentExportRecord(
+                    item_key=item.key,
+                    attachment_key=attachment.key,
+                    filename=attachment.filename,
+                    citation_key=item.citation_key,
+                    zotero_uri=zotero_uri,
+                    zotero_uri_web=zotero_uri_web,
+                    zotero_uri_select=zotero_uri_select,
+                    zotero_file_url=zotero_file_url,
+                    discovered_at=discovered_at,
+                    item_title=item.title,
+                    library_id=library_id,
+                    library_type=library_type,
+                    content_type=attachment.content_type,
+                    is_pdf=True,
+                )
+            )
+    return records
+
+
+def log_export_records(
+    records: list[DiscoveredAttachmentExportRecord],
+    logger: logging.Logger,
+) -> None:
+    """Log each export record and a short summary."""
+    if not records:
+        logger.info("No PDF attachments found — nothing to export.")
+        return
+
+    for rec in records:
+        ck = rec.citation_key if rec.citation_key is not None else ""
+        msg = (
+            f"[DISCOVERY URL] item_key={rec.item_key}  "
+            f"attachment_key={rec.attachment_key}\n"
+            f"                filename={rec.filename}  citation_key={ck}\n"
+            f"                zotero_uri={rec.zotero_uri}\n"
+            f"                zotero_uri_web={rec.zotero_uri_web}\n"
+            f"                zotero_uri_select={rec.zotero_uri_select}\n"
+            f"                zotero_file_url={rec.zotero_file_url}"
+        )
+        logger.info(msg)
+    logger.info(f"Exported {len(records)} attachment URL record(s).")
+
+
+def write_manifest(
+    records: list[DiscoveredAttachmentExportRecord],
+    manifest_path: str,
+    logger: logging.Logger,
+) -> None:
+    """Write export records to a UTF-8 JSON manifest file."""
+    path = Path(manifest_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = [record.to_dict() for record in records]
+    path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    logger.info(
+        f"Manifest written to {manifest_path} ({len(records)} records)."
+    )

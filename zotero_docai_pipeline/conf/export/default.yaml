@@ -1,0 +1,6 @@
+attachment_urls:
+  enabled: false
+  log: true
+  write_manifest: false
+  manifest_path: null
+  format: json

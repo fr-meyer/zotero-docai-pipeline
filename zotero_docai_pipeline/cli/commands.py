@@ -163,7 +163,7 @@ def dry_run_command(
             )
 
     if cfg.export.attachment_urls.enabled:
-        records = build_export_records(items, zotero_client, cfg.export)
+        records = build_export_records(items, zotero_client)
         if cfg.export.attachment_urls.log:
             log_export_records(records, logger)
         if cfg.export.attachment_urls.write_manifest:

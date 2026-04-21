@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from zotero_docai_pipeline.clients.zotero_client import ZoteroClient
-from zotero_docai_pipeline.domain.config import ExportConfig
 from zotero_docai_pipeline.domain.models import (
     DiscoveredAttachmentExportRecord,
     DiscoveredItem,
@@ -20,7 +19,6 @@ _logger = logging.getLogger(__name__)
 def build_export_records(
     items: list[DiscoveredItem],
     zotero_client: ZoteroClient,
-    export_cfg: ExportConfig,
 ) -> list[DiscoveredAttachmentExportRecord]:
     """Build export rows for PDF attachments on the given discovered items."""
     discovered_at = datetime.now(timezone.utc).isoformat()

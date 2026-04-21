@@ -17,6 +17,11 @@ from zotero_docai_pipeline.domain.models import ProcessingResult, TagAddingResul
 from zotero_docai_pipeline.domain.tree_processor import TreeStructureProcessor
 from zotero_docai_pipeline.orchestration.pipeline import Pipeline
 from zotero_docai_pipeline.orchestration.processor import ItemProcessor
+from zotero_docai_pipeline.utils.export import (
+    build_export_records,
+    log_export_records,
+    write_manifest,
+)
 from zotero_docai_pipeline.utils.logging import (
     _format_with_emoji,
     _supports_unicode,
@@ -156,6 +161,13 @@ def dry_run_command(
             logger.info(
                 f"  First {min(5, len(unmatched_keys))} example(s): {unmatched_keys[:5]}"
             )
+
+    if cfg.export.attachment_urls.enabled:
+        records = build_export_records(items, zotero_client, cfg.export)
+        if cfg.export.attachment_urls.log:
+            log_export_records(records, logger)
+        if cfg.export.attachment_urls.write_manifest:
+            write_manifest(records, cfg.export.attachment_urls.manifest_path)
 
     return 0
 
@@ -406,6 +418,7 @@ def process_command(
         cfg.tag_adding,
         cfg.tagging,
         tree_processor=tree_processor,
+        export_config=cfg.export,
     )
     summary = pipeline.run()
 

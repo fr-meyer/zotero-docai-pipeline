@@ -28,7 +28,7 @@ outputs/
 test_results_full.log
 
 # Data / assets (comment out if you want to track these)
-Zotero/
+/Zotero/
 
 # IDE / OS
 .idea/

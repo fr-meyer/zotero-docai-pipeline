@@ -735,22 +735,24 @@ def register_configs() -> None:
 
     cs = ConfigStore.instance()
 
-    # Register config groups with names matching YAML defaults
-    cs.store(group="zotero", name="default", node=ZoteroConfig)
+    # Register config groups with names distinct from YAML files to avoid
+    # deprecated automatic schema matching. Each YAML file explicitly extends
+    # its schema via its defaults list.
+    cs.store(group="zotero", name="base_default", node=ZoteroConfig)
 
     # Register OCR provider configs
-    cs.store(group="ocr", name="mistral", node=MistralOCRConfig)
-    cs.store(group="ocr", name="pageindex", node=PageIndexOCRConfig)
+    cs.store(group="ocr", name="base_mistral", node=MistralOCRConfig)
+    cs.store(group="ocr", name="base_pageindex", node=PageIndexOCRConfig)
     # Note: OCRProviderConfig is abstract base class, not registered as default
     # Users must select a concrete provider (mistral or pageindex)
 
-    cs.store(group="processing", name="default", node=ProcessingConfig)
-    cs.store(group="storage", name="default", node=StorageConfig)
-    cs.store(group="tree_structure", name="default", node=TreeStructureConfig)
-    cs.store(group="download", name="default", node=DownloadConfig)
-    cs.store(group="tag_adding", name="default", node=TagAddingConfig)
-    cs.store(group="tagging", name="default", node=TaggingConfig)
+    cs.store(group="processing", name="base_default", node=ProcessingConfig)
+    cs.store(group="storage", name="base_default", node=StorageConfig)
+    cs.store(group="tree_structure", name="base_default", node=TreeStructureConfig)
+    cs.store(group="download", name="base_default", node=DownloadConfig)
+    cs.store(group="tag_adding", name="base_default", node=TagAddingConfig)
+    cs.store(group="tagging", name="base_default", node=TaggingConfig)
 
     # Register top-level config
-    cs.store(name="config", node=AppConfig)
+    cs.store(name="base_config", node=AppConfig)
     _configs_registered = True

@@ -1,3 +1,7 @@
+defaults:
+  - base_mistral
+  - _self_
+
 # Mistral AI OCR configuration
 # This file defines default values for MistralOCRConfig
 # Values can be overridden via command line or config overrides
@@ -6,7 +10,7 @@
 enabled: false
 
 # API configuration
-api_key: ${oc.env:MISTRAL_API_KEY,}
+api_key: ${oc.env:MISTRAL_API_KEY,""}
 model: mistral-ocr-latest
 
 # Output format

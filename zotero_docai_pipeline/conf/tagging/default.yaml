@@ -1,3 +1,7 @@
+defaults:
+  - base_default
+  - _self_
+
 # Tagging workflow configuration
 selection:
   include:

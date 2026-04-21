@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -98,10 +99,28 @@ def write_manifest(
     path = Path(manifest_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     data = [record.to_dict() for record in records]
-    path.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    content = json.dumps(data, indent=2, ensure_ascii=False)
+    tmp_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            tmp_path = tmp.name
+            tmp.write(content)
+            tmp.flush()
+        Path(tmp_path).replace(path)
+    finally:
+        if tmp_path is not None:
+            try:
+                leftover = Path(tmp_path)
+                if leftover.exists():
+                    leftover.unlink()
+            except OSError:
+                pass
     _logger.info(
         f"Manifest written to {manifest_path} ({len(records)} records)."
     )

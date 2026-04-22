@@ -501,3 +501,54 @@ class DocumentTree:
             result["nodes"] = [node.to_dict() for node in self.nodes]
 
         return result
+
+
+@dataclass
+class DiscoveredAttachmentExportRecord:
+    """A single attachment URL row for export (e.g. JSON manifest)."""
+
+    item_key: str
+    """Zotero parent item key."""
+
+    attachment_key: str
+    """Zotero attachment key."""
+
+    filename: str
+    """Attachment filename."""
+
+    citation_key: str | None
+    """Citation key when available."""
+
+    zotero_uri: str
+    """Zotero local application URI."""
+
+    zotero_uri_web: str
+    """Zotero web library URI."""
+
+    zotero_uri_select: str
+    """Zotero select URI."""
+
+    zotero_file_url: str
+    """Zotero file URL for the attachment."""
+
+    discovered_at: str
+    """ISO or pipeline timestamp when the attachment was discovered."""
+
+    item_title: str | None
+    """Parent item title."""
+
+    library_id: str | None
+    """Zotero library id."""
+
+    library_type: str | None
+    """Zotero library type (e.g. user, group)."""
+
+    content_type: str | None
+    """Attachment MIME type."""
+
+    is_pdf: bool | None
+    """Whether the attachment is a PDF, when known."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise all fields to a dict, including ``None`` values."""
+        return {f.name: getattr(self, f.name) for f in fields(self)}

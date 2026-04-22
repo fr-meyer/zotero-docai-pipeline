@@ -33,8 +33,10 @@ from zotero_docai_pipeline.clients.pageindex_tree_client import PageIndexTreeCli
 from zotero_docai_pipeline.clients.zotero_client import ZoteroClient
 from zotero_docai_pipeline.domain.config import (
     AppConfig,
+    AttachmentUrlExportConfig,
     ConfigError,
     DownloadConfig,
+    ExportConfig,
     MistralOCRConfig,
     PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER,
     PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR,
@@ -163,8 +165,8 @@ def validate_flags(cfg: AppConfig) -> None:
        both be True. Dry-run mode is for testing configuration without actual
        operations, while download is an actual operation.
     2. At least one operation enabled: At least one of download.enabled,
-       ocr.enabled, or tag_adding.enabled must be True. The pipeline requires
-       at least one operation to perform.
+       ocr.enabled, or tag_adding.enabled must be True, except for
+       export-only dry-run (processing.dry_run with export.attachment_urls.enabled).
 
     Note:
         When called from ``main()``, the all-disabled check below may be
@@ -189,10 +191,11 @@ def validate_flags(cfg: AppConfig) -> None:
         )
 
     if not cfg.download.enabled and not cfg.ocr.enabled and not cfg.tag_adding.enabled:
-        raise ConfigError(
-            "Invalid configuration: at least one operation must be enabled. "
-            "Set download.enabled=true, ocr.enabled=true, or tag_adding.enabled=true."
-        )
+        if not (cfg.processing.dry_run and cfg.export.attachment_urls.enabled):
+            raise ConfigError(
+                "Invalid configuration: at least one operation must be enabled. "
+                "Set download.enabled=true, ocr.enabled=true, or tag_adding.enabled=true."
+            )
 
     logger.debug("Flag configuration validated successfully")
 
@@ -424,6 +427,9 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
         include_abstract=cfg.tagging.include_abstract,
     )
 
+    attachment_urls_export = AttachmentUrlExportConfig(**cfg.export.attachment_urls)
+    export_config = ExportConfig(attachment_urls=attachment_urls_export)
+
     return AppConfig(
         zotero=ZoteroConfig(**cfg.zotero),
         ocr=ocr_config,
@@ -433,6 +439,7 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
         download=DownloadConfig(retry=retry_config, **download_kw),
         tag_adding=tag_adding_config,
         tagging=tagging_config,
+        export=export_config,
     )
 
 
@@ -496,11 +503,16 @@ def main(cfg: DictConfig) -> None:
         app_cfg = build_app_config(cfg)
 
         # --- No-op help branch (replaces the ConfigError for all-disabled) ---
-        if (
+        all_ops_disabled = (
             not app_cfg.download.enabled
             and not app_cfg.ocr.enabled
             and not app_cfg.tag_adding.enabled
-        ):
+        )
+        export_only_dry_run = (
+            app_cfg.processing.dry_run
+            and app_cfg.export.attachment_urls.enabled
+        )
+        if all_ops_disabled and not export_only_dry_run:
             print(_HELP_TEXT)
             exit_code = 0
         else:

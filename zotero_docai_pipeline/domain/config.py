@@ -535,6 +535,50 @@ class TagAddingConfig:
 
 
 @dataclass
+class AttachmentUrlExportConfig:
+    """Configuration for exporting discovered attachment URLs."""
+
+    enabled: bool = False
+    """Whether attachment URL export is enabled."""
+
+    log: bool = True
+    """Whether to log export activity."""
+
+    write_manifest: bool = False
+    """Whether to write a manifest file to disk."""
+
+    manifest_path: str | None = None
+    """Path for the manifest file when write_manifest is True."""
+
+    format: str = "json"
+    """Export format identifier."""
+
+    def __post_init__(self) -> None:
+        """Validate attachment URL export configuration."""
+        if self.write_manifest and (
+            self.manifest_path is None or self.manifest_path.strip() == ""
+        ):
+            raise ConfigError(
+                "export.attachment_urls.manifest_path must be set when write_manifest=true. "
+                "Override with: export.attachment_urls.manifest_path=./path/to/file.json"
+            )
+        if self.format not in {"json"}:
+            raise ConfigError(
+                f"export.attachment_urls.format must be 'json', got {self.format!r}"
+            )
+
+
+@dataclass
+class ExportConfig:
+    """Top-level export feature configuration."""
+
+    attachment_urls: AttachmentUrlExportConfig = field(
+        default_factory=AttachmentUrlExportConfig
+    )
+    """Attachment URL export settings."""
+
+
+@dataclass
 class TreeStructureConfig:
     """Configuration for document tree structure extraction and processing.
 
@@ -719,6 +763,9 @@ class AppConfig:
     tag_adding: TagAddingConfig = field(default_factory=TagAddingConfig)
     """Tag Adding feature configuration."""
 
+    export: ExportConfig = field(default_factory=ExportConfig)
+    """Export feature configuration."""
+
     tagging: TaggingConfig = field(default_factory=TaggingConfig)
     """Tag-based item selection and post-processing workflow configuration."""
 
@@ -751,6 +798,7 @@ def register_configs() -> None:
     cs.store(group="tree_structure", name="base_default", node=TreeStructureConfig)
     cs.store(group="download", name="base_default", node=DownloadConfig)
     cs.store(group="tag_adding", name="base_default", node=TagAddingConfig)
+    cs.store(group="export", name="default", node=ExportConfig)
     cs.store(group="tagging", name="base_default", node=TaggingConfig)
 
     # Register top-level config

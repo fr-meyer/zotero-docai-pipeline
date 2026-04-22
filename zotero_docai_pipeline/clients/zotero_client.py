@@ -118,6 +118,36 @@ class ZoteroClient:
         self._zotero = Zotero(config.library_id, "user", config.api_key)
         logger.info(f"Initialized ZoteroClient for library_id: {config.library_id}")
 
+    def build_attachment_file_url(
+        self, attachment_key: str, library_type: str | None = None
+    ) -> str:
+        """Build the Zotero API file URL for an attachment (no network I/O).
+
+        Args:
+            attachment_key: Zotero attachment item key.
+            library_type: "user" (default) or "groups"; "group" is accepted and
+                normalized to "groups".
+
+        Returns:
+            HTTPS URL for /users|groups/.../items/{key}/file.
+        """
+        lt = "user" if library_type is None else library_type.lower()
+        if lt == "group":
+            lt = "groups"
+        if lt == "user":
+            return (
+                f"https://api.zotero.org/users/{self.config.library_id}/items/"
+                f"{attachment_key}/file"
+            )
+        if lt == "groups":
+            return (
+                f"https://api.zotero.org/groups/{self.config.library_id}/items/"
+                f"{attachment_key}/file"
+            )
+        raise ValueError(
+            f"library_type must be 'user', 'group', or 'groups', got {library_type!r}"
+        )
+
     def _fetch_items_for_tag(self, tag: str) -> dict[str, dict[str, Any]]:
         """Fetch all Zotero items matching a single tag.
 

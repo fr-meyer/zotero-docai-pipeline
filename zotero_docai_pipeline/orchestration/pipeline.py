@@ -63,6 +63,7 @@ from zotero_docai_pipeline.clients.zotero_client import ZoteroClient
 from zotero_docai_pipeline.domain.config import (
     ConfigError,
     DownloadConfig,
+    ExportConfig,
     OCRProviderConfig,
     ProcessingConfig,
     StorageConfig,
@@ -90,6 +91,11 @@ from zotero_docai_pipeline.utils.logging import (
     log_startup,
     log_tag_adding_result,
     log_tag_adding_start,
+)
+from zotero_docai_pipeline.utils.export import (
+    build_export_records,
+    log_export_records,
+    write_manifest,
 )
 from zotero_docai_pipeline.utils.progress import ProgressBar
 from zotero_docai_pipeline.utils.retry import retry_with_backoff
@@ -151,6 +157,7 @@ class Pipeline:
         tag_adding_config: TagAddingConfig,
         tagging_config: TaggingConfig,
         tree_processor: TreeStructureProcessor | None = None,
+        export_config: ExportConfig | None = None,
     ) -> None:
         """Initialize the Pipeline with dependencies.
 
@@ -169,6 +176,9 @@ class Pipeline:
             tag_adding_config: Configuration for tag adding feature.
             tagging_config: Configuration for tag-based item selection and
                 post-processing tag application.
+            export_config: Configuration for optional export features (e.g.
+                attachment URL manifest). Defaults to a fresh ``ExportConfig()``
+                when ``None``.
         """
         self.zotero_client = zotero_client
         self.ocr_client = ocr_client
@@ -181,6 +191,7 @@ class Pipeline:
         self.download_config = download_config
         self.tag_adding_config = tag_adding_config
         self.tagging_config = tagging_config
+        self.export_config = export_config if export_config is not None else ExportConfig()
         self.logger = logging.getLogger(__name__)
         self._tree_structures: dict[str, DocumentTree] = {}
         self._download_path_mapping: dict[str, str] = {}
@@ -1814,6 +1825,15 @@ class Pipeline:
 
         # Step 1: Discover items
         items, discovery_stats = self._discover_items()
+
+        if self.export_config.attachment_urls.enabled:
+            records = build_export_records(items, self.zotero_client)
+            if self.export_config.attachment_urls.log:
+                log_export_records(records, self.logger)
+            if self.export_config.attachment_urls.write_manifest:
+                write_manifest(
+                    records, self.export_config.attachment_urls.manifest_path
+                )
 
         # Step 2: Handle empty list
         if not items:

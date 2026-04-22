@@ -798,7 +798,7 @@ def register_configs() -> None:
     cs.store(group="tree_structure", name="base_default", node=TreeStructureConfig)
     cs.store(group="download", name="base_default", node=DownloadConfig)
     cs.store(group="tag_adding", name="base_default", node=TagAddingConfig)
-    cs.store(group="export", name="default", node=ExportConfig)
+    cs.store(group="export", name="base_default", node=ExportConfig)
     cs.store(group="tagging", name="base_default", node=TaggingConfig)
 
     # Register top-level config

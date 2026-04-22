@@ -1,3 +1,7 @@
+defaults:
+  - base_default
+  - _self_
+
 attachment_urls:
   enabled: false
   log: true

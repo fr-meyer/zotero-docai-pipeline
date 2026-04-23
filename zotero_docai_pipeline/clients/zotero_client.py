@@ -13,6 +13,7 @@ import re
 import time
 from typing import Any, cast
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 
 from pyzotero import zotero_errors
 from pyzotero.zotero import Zotero
@@ -22,7 +23,11 @@ from zotero_docai_pipeline.clients.exceptions import (
     ZoteroAuthError,
     ZoteroItemNotFoundError,
 )
-from zotero_docai_pipeline.domain.config import AuthQueryConfig, TagSelectionConfig
+from zotero_docai_pipeline.domain.config import (
+    AuthQueryConfig,
+    ConfigError,
+    TagSelectionConfig,
+)
 from zotero_docai_pipeline.domain.markdown_converter import convert_markdown_to_html
 from zotero_docai_pipeline.domain.models import (
     AttachmentInfo,
@@ -32,6 +37,7 @@ from zotero_docai_pipeline.domain.models import (
     NotePayload,
     PaperMetadata,
 )
+from zotero_docai_pipeline.utils.redaction import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -112,12 +118,27 @@ class ZoteroClient:
         """Initialize the Zotero client.
 
         Args:
-            config: Zotero API credentials (library id, read key; write key
-                is reserved for later dual-client use).
+            config: Zotero API credentials (library id, read key, optional write key).
         """
         self.config = config
-        self._zotero = Zotero(config.library_id, "user", config.read_key)
+        self.credentials: AuthQueryConfig = config
+        self._zotero_read = Zotero(config.library_id, "user", config.read_key)
+        if config.write_key is not None:
+            self._zotero_write = Zotero(
+                config.library_id, "user", config.write_key
+            )
+        else:
+            self._zotero_write = None
         logger.info(f"Initialized ZoteroClient for library_id: {config.library_id}")
+
+    def _require_write_client(self) -> Zotero:
+        """Return the PyZotero client used for write operations, or raise."""
+        if self._zotero_write is None:
+            raise ConfigError(
+                "ZOTERO_WRITE_KEY is required for write operations. "
+                "Set the ZOTERO_WRITE_KEY environment variable."
+            )
+        return self._zotero_write
 
     def build_attachment_file_url(
         self, attachment_key: str, library_type: str | None = None
@@ -149,6 +170,29 @@ class ZoteroClient:
             f"library_type must be 'user', 'group', or 'groups', got {library_type!r}"
         )
 
+    def build_authenticated_attachment_url(
+        self, attachment_key: str, library_type: str | None = None
+    ) -> str:
+        """Build a Zotero file URL with read-key query authentication (no network I/O).
+
+        Returns the authenticated URL in memory only. Never log the return value
+        directly — always pass through ``redact_url()`` first.
+
+        Args:
+            attachment_key: Zotero attachment item key.
+            library_type: Same as :meth:`build_attachment_file_url`.
+
+        Returns:
+            HTTPS file URL including a ``key`` query parameter for the read API key.
+        """
+        plain_url = self.build_attachment_file_url(attachment_key, library_type)
+        auth_url = f"{plain_url}?{urlencode({'key': self.credentials.read_key})}"
+        logger.debug(
+            "Built authenticated attachment URL: %s",
+            redact_url(auth_url),
+        )
+        return auth_url
+
     def _fetch_items_for_tag(self, tag: str) -> dict[str, dict[str, Any]]:
         """Fetch all Zotero items matching a single tag.
 
@@ -167,7 +211,7 @@ class ZoteroClient:
         """
         try:
             logger.debug(f"Fetching items for tag: {tag}")
-            raw_items = self._zotero.items(tag=tag)
+            raw_items = self._zotero_read.items(tag=tag)
 
             result: dict[str, dict[str, Any]] = {}
             for item in raw_items:
@@ -371,7 +415,7 @@ class ZoteroClient:
         """
         try:
             logger.debug(f"Fetching items with tag: {tag}")
-            items = self._zotero.items(tag=tag)
+            items = self._zotero_read.items(tag=tag)
 
             # Filter out items with exclude_tag
             if exclude_tag:
@@ -408,7 +452,7 @@ class ZoteroClient:
 
                 # Get child items (attachments)
                 try:
-                    children = self._zotero.children(item_key)
+                    children = self._zotero_read.children(item_key)
                     pdf_attachments = []
                     for child in children:
                         if not isinstance(child, dict):
@@ -577,7 +621,7 @@ class ZoteroClient:
             # Fetch PDF children
             attachments: list[AttachmentInfo] = []
             try:
-                children = self._zotero.children(item_key)
+                children = self._zotero_read.children(item_key)
                 for child in children:
                     if not isinstance(child, dict):
                         continue
@@ -693,7 +737,7 @@ class ZoteroClient:
             logger.debug(
                 f"Downloading PDF: item_key={item_key}, attachment_key={attachment_key}"
             )
-            pdf_bytes_raw = self._zotero.file(attachment_key)
+            pdf_bytes_raw = self._zotero_read.file(attachment_key)
             # Ensure return type is bytes
             if isinstance(pdf_bytes_raw, bytes):
                 pdf_bytes = pdf_bytes_raw
@@ -771,6 +815,7 @@ class ZoteroClient:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
+        zwrite = self._require_write_client()
         try:
             # Transform NotePayload objects to Zotero note dicts
             note_dicts = []
@@ -809,7 +854,7 @@ class ZoteroClient:
             logger.debug(
                 f"Creating batch of {len(note_dicts)} notes for parent_key={parent_key}"
             )
-            result = self._zotero.create_items(note_dicts, parentid=parent_key)
+            result = zwrite.create_items(note_dicts, parentid=parent_key)
 
             # Check for partial failures in batch operation
             failed = result.get("failed", {})
@@ -982,13 +1027,14 @@ class ZoteroClient:
         if not note_keys:
             return
 
+        zw = self._require_write_client()
         logger.debug(f"Deleting {len(note_keys)} notes for rollback")
         deleted_count = 0
         failed_keys = []
 
         for note_key in note_keys:
             try:
-                self._zotero.delete_item(note_key)
+                zw.delete_item(note_key)
                 deleted_count += 1
                 logger.debug(f"Deleted note: {note_key}")
             except HTTPError as e:
@@ -1037,6 +1083,7 @@ class ZoteroClient:
             ZoteroAuthError: If authentication fails.
             ZoteroItemNotFoundError: If the item doesn't exist (404).
         """
+        zw = self._require_write_client()
         max_retries = 5
         for attempt in range(1, max_retries + 1):
             try:
@@ -1045,7 +1092,7 @@ class ZoteroClient:
                 )
 
                 # Fetch item immediately before update to get latest version
-                item = self._zotero.item(item_key)
+                item = zw.item(item_key)
 
                 # Check if tag already exists
                 if not isinstance(item, dict):
@@ -1073,10 +1120,10 @@ class ZoteroClient:
                 # Don't re-fetch - update immediately with the version we have
                 # If version changed, the 412 error will trigger a retry with
                 # fresh fetch
-                self._zotero.add_tags(item, tag)
+                zw.add_tags(item, tag)
 
                 # Update immediately - if version changed, we'll get 412 and retry
-                self._zotero.update_item(item)
+                zw.update_item(item)
                 logger.info(f"Successfully added tag '{tag}' to item_key={item_key}")
                 return
 
@@ -1085,7 +1132,7 @@ class ZoteroClient:
                 # Verify by fetching the item and checking if tag exists
                 try:
                     time.sleep(0.1)  # Small delay to allow Zotero to process
-                    verify_item = self._zotero.item(item_key)
+                    verify_item = zw.item(item_key)
                     if not isinstance(verify_item, dict):
                         raise ZoteroAPIError(
                             f"Invalid item structure for item_key={item_key}"
@@ -1194,6 +1241,7 @@ class ZoteroClient:
             ZoteroAuthError: If authentication fails.
             ZoteroItemNotFoundError: If the item doesn't exist (404).
         """
+        zw = self._require_write_client()
         max_retries = 5
         for attempt in range(1, max_retries + 1):
             try:
@@ -1202,7 +1250,7 @@ class ZoteroClient:
                     f"(attempt {attempt}, tags={tags})"
                 )
 
-                item = self._zotero.item(item_key)
+                item = zw.item(item_key)
 
                 if not isinstance(item, dict):
                     raise ZoteroAPIError(
@@ -1217,7 +1265,7 @@ class ZoteroClient:
 
                 item_data["tags"] = [{"tag": t} for t in tags]
 
-                self._zotero.update_item(item)
+                zw.update_item(item)
                 logger.info(
                     f"Successfully set tags {tags} on item_key={item_key}"
                 )
@@ -1226,7 +1274,7 @@ class ZoteroClient:
             except zotero_errors.PreConditionFailedError as e:
                 try:
                     time.sleep(0.1)
-                    verify_item = self._zotero.item(item_key)
+                    verify_item = zw.item(item_key)
                     if not isinstance(verify_item, dict):
                         raise ZoteroAPIError(
                             f"Invalid item structure for item_key={item_key}"
@@ -1322,9 +1370,10 @@ class ZoteroClient:
             ZoteroAuthError: If authentication fails.
             ZoteroItemNotFoundError: If the item doesn't exist (404).
         """
+        zw = self._require_write_client()
         try:
             logger.debug(f"Removing tag '{tag}' from item_key={item_key}")
-            item = self._zotero.item(item_key)
+            item = zw.item(item_key)
 
             # Manually remove tag from item['data']['tags'] list
             if not isinstance(item, dict):
@@ -1338,7 +1387,7 @@ class ZoteroClient:
             tags = item_data.get("tags", [])
             item_data["tags"] = [t for t in tags if t.get("tag") != tag]
 
-            self._zotero.update_item(item)
+            zw.update_item(item)
             logger.info(f"Successfully removed tag '{tag}' from item_key={item_key}")
         except zotero_errors.PreConditionFailedError as e:
             # Handle version conflict: retry with exponential backoff (up to 3 attempts)
@@ -1360,7 +1409,7 @@ class ZoteroClient:
                         )  # Exponential backoff: 0.2s, 0.4s, 0.6s
 
                     # Re-fetch item to get latest version
-                    item = self._zotero.item(item_key)
+                    item = zw.item(item_key)
 
                     # Check if tag already removed (may have been removed by
                     # another process)
@@ -1393,7 +1442,7 @@ class ZoteroClient:
                     item_data["tags"] = [t for t in tags if t.get("tag") != tag]
 
                     # Update with fresh version
-                    self._zotero.update_item(item)
+                    zw.update_item(item)
                     logger.info(
                         f"Successfully removed tag '{tag}' from "
                         f"item_key={item_key} after version conflict retry "

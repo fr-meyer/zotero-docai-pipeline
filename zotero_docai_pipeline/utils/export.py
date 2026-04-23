@@ -23,7 +23,7 @@ def build_export_records(
 ) -> list[DiscoveredAttachmentExportRecord]:
     """Build export rows for PDF attachments on the given discovered items."""
     discovered_at = datetime.now(timezone.utc).isoformat()
-    library_id = zotero_client.config.library_id
+    library_id = zotero_client.credentials.library_id
     library_type = "user"
 
     records: list[DiscoveredAttachmentExportRecord] = []

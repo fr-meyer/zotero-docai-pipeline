@@ -520,13 +520,13 @@ class DiscoveredAttachmentExportRecord:
     """Citation key when available."""
 
     zotero_uri: str
-    """Zotero local application URI."""
+    """Canonical Zotero web URL for the parent item (e.g. ``https://www.zotero.org/users/<id>/items/<key>``)."""
 
     zotero_uri_web: str
-    """Zotero web library URI."""
+    """Explicit alias for the canonical web URL form; always identical to ``zotero_uri``."""
 
     zotero_uri_select: str
-    """Zotero select URI."""
+    """Zotero deep-link / local application URI for opening the item in the Zotero desktop client (e.g. ``zotero://select/library/items/<key>``)."""
 
     zotero_file_url: str
     """Zotero file URL for the attachment."""

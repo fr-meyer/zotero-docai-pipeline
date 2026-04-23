@@ -218,14 +218,17 @@ def validate_flags(cfg: AppConfig) -> None:
         write_reasons.append("OCR (live run creates Zotero notes)")
     if cfg.tag_adding.enabled:
         write_reasons.append("tag_adding.enabled")
-    if cfg.tagging.apply_on_success.values:
-        write_reasons.append("tagging.apply_on_success is non-empty")
+    if cfg.tagging.apply_on_success.values and not cfg.processing.dry_run:
+        write_reasons.append(
+            "tagging.apply_on_success is non-empty (live run writes post-processing success tags)"
+        )
     if (
         cfg.tagging.apply_on_error.values
         and cfg.zotero.error_tagging_enabled
+        and not cfg.processing.dry_run
     ):
         write_reasons.append(
-            "tagging.apply_on_error is non-empty and zotero.error_tagging_enabled"
+            "tagging.apply_on_error is non-empty and zotero.error_tagging_enabled (live run writes post-processing error tags)"
         )
     if write_reasons:
         wk = cfg.credentials.write_key
@@ -483,6 +486,36 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
         **att_urls, auth_query=AuthQueryHelperConfig(**auth_query_raw)
     )
     export_config = ExportConfig(attachment_urls=attachment_urls_export)
+
+    if not OmegaConf.is_missing(cfg, "credentials"):
+        credentials_cfg = cfg.credentials
+        if not OmegaConf.is_missing(credentials_cfg, "library_id"):
+            raw_library_id = credentials_cfg.library_id
+            if (
+                raw_library_id not in (None, "")
+                and raw_library_id != PACKAGED_PLACEHOLDER_LIBRARY_ID
+            ):
+                raise ConfigError(
+                    "credentials.library_id must not be set via Hydra override. "
+                    "Set ZOTERO_LIBRARY_ID as an environment variable instead."
+                )
+        if not OmegaConf.is_missing(credentials_cfg, "read_key"):
+            raw_read_key = credentials_cfg.read_key
+            if (
+                raw_read_key not in (None, "")
+                and raw_read_key != PACKAGED_PLACEHOLDER_READ_KEY
+            ):
+                raise ConfigError(
+                    "credentials.read_key must not be set via Hydra override. "
+                    "Set ZOTERO_READ_KEY as an environment variable instead."
+                )
+        if not OmegaConf.is_missing(credentials_cfg, "write_key"):
+            raw_write_key = credentials_cfg.write_key
+            if raw_write_key not in (None, ""):
+                raise ConfigError(
+                    "credentials.write_key must not be set via Hydra override. "
+                    "Set ZOTERO_WRITE_KEY as an environment variable instead."
+                )
 
     library_id = os.getenv("ZOTERO_LIBRARY_ID") or PACKAGED_PLACEHOLDER_LIBRARY_ID
     read_key_env = os.getenv("ZOTERO_READ_KEY") or PACKAGED_PLACEHOLDER_READ_KEY

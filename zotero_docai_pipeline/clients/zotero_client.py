@@ -22,7 +22,7 @@ from zotero_docai_pipeline.clients.exceptions import (
     ZoteroAuthError,
     ZoteroItemNotFoundError,
 )
-from zotero_docai_pipeline.domain.config import TagSelectionConfig, ZoteroConfig
+from zotero_docai_pipeline.domain.config import AuthQueryConfig, TagSelectionConfig
 from zotero_docai_pipeline.domain.markdown_converter import convert_markdown_to_html
 from zotero_docai_pipeline.domain.models import (
     AttachmentInfo,
@@ -44,12 +44,12 @@ class ZoteroClient:
     PDF downloads, batch note creation, and tag management.
 
     Example:
-        >>> from zotero_docai_pipeline.domain.config import ZoteroConfig
+        >>> from zotero_docai_pipeline.domain.config import AuthQueryConfig
         >>> from zotero_docai_pipeline.clients.zotero_client import ZoteroClient
         >>>
-        >>> config = ZoteroConfig(
+        >>> config = AuthQueryConfig(
         ...     library_id="123456",
-        ...     api_key="your_api_key_here"
+        ...     read_key="your_read_key_here",
         ... )
         >>> client = ZoteroClient(config)
         >>> items = client.get_items_by_tag("docai", "docai-processed")
@@ -108,14 +108,15 @@ class ZoteroClient:
         else:
             return f"{note.pdf_filename} (All Pages)"
 
-    def __init__(self, config: ZoteroConfig) -> None:
+    def __init__(self, config: AuthQueryConfig) -> None:
         """Initialize the Zotero client.
 
         Args:
-            config: Zotero configuration containing library_id and api_key.
+            config: Zotero API credentials (library id, read key; write key
+                is reserved for later dual-client use).
         """
         self.config = config
-        self._zotero = Zotero(config.library_id, "user", config.api_key)
+        self._zotero = Zotero(config.library_id, "user", config.read_key)
         logger.info(f"Initialized ZoteroClient for library_id: {config.library_id}")
 
     def build_attachment_file_url(

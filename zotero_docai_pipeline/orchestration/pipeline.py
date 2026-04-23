@@ -1828,12 +1828,18 @@ class Pipeline:
         items, discovery_stats = self._discover_items()
 
         if self.export_config.attachment_urls.enabled:
-            records = build_export_records(items, self.zotero_client)
+            records = build_export_records(
+                items,
+                self.zotero_client,
+                include_authenticated_url=self.export_config.attachment_urls.auth_query.enabled,
+            )
             if self.export_config.attachment_urls.auth_query.enabled:
                 for rec in records:
-                    auth_url = self.zotero_client.build_authenticated_attachment_url(
-                        rec.attachment_key
-                    )
+                    auth_url = rec.authenticated_zotero_file_url
+                    if auth_url is None:
+                        auth_url = self.zotero_client.build_authenticated_attachment_url(
+                            rec.attachment_key
+                        )
                     self.logger.info(
                         "[AUTH QUERY URL] item_key=%s attachment_key=%s url=%s",
                         rec.item_key,

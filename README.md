@@ -70,6 +70,8 @@ python -m zotero_docai_pipeline processing.dry_run=true export.attachment_urls.e
 
 This mode does **not** require `PAGEINDEX_API_KEY` or `MISTRAL_API_KEY`. It runs discovery, logs one `[DISCOVERY URL]` record per PDF attachment, and exits — no bytes are downloaded, no notes are written, and no OCR credentials are needed.
 
+When `export.attachment_urls.auth_query.enabled=true`, the exported records keep the Zotero attachment filename as canonical metadata while also emitting an explicit `ingest_url` and `ingest_url_kind`. If you also write a manifest, that manifest will include an authenticated Zotero attachment URL for downstream URL-ingest workflows. Treat that manifest as sensitive because the authenticated URL contains a read-key query parameter.
+
 ## Installation
 
 ### Install the package

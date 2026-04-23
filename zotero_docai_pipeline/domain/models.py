@@ -532,7 +532,16 @@ class DiscoveredAttachmentExportRecord:
     """Zotero deep-link / local application URI for opening the item in the Zotero desktop client (e.g. ``zotero://select/library/items/<key>``)."""
 
     zotero_file_url: str
-    """Zotero file URL for the attachment."""
+    """Plain Zotero file URL for the attachment."""
+
+    authenticated_zotero_file_url: str | None
+    """Authenticated Zotero attachment URL when exported with auth-query support."""
+
+    ingest_url: str
+    """The URL that downstream URL-ingest workflows should treat as the selected ingest source."""
+
+    ingest_url_kind: str
+    """Identifier for the selected ingest URL class (for example ``zotero_file_url`` or ``authenticated_zotero_attachment_url``)."""
 
     discovered_at: str
     """ISO or pipeline timestamp when the attachment was discovered."""

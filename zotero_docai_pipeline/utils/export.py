@@ -13,6 +13,7 @@ from zotero_docai_pipeline.domain.models import (
     DiscoveredAttachmentExportRecord,
     DiscoveredItem,
 )
+from zotero_docai_pipeline.utils.redaction import redact_url
 
 _logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ def _is_generic_filename(filename: str) -> bool:
 def build_export_records(
     items: list[DiscoveredItem],
     zotero_client: ZoteroClient,
+    include_authenticated_url: bool = False,
 ) -> list[DiscoveredAttachmentExportRecord]:
     """Build export rows for PDF attachments on the given discovered items."""
     discovered_at = datetime.now(timezone.utc).isoformat()
@@ -80,6 +82,17 @@ def build_export_records(
             zotero_file_url = zotero_client.build_attachment_file_url(
                 attachment.key, library_type
             )
+            authenticated_zotero_file_url: str | None = None
+            ingest_url = zotero_file_url
+            ingest_url_kind = "zotero_file_url"
+            if include_authenticated_url:
+                authenticated_zotero_file_url = (
+                    zotero_client.build_authenticated_attachment_url(
+                        attachment.key, library_type
+                    )
+                )
+                ingest_url = authenticated_zotero_file_url
+                ingest_url_kind = "authenticated_zotero_attachment_url"
 
             records.append(
                 DiscoveredAttachmentExportRecord(
@@ -92,6 +105,9 @@ def build_export_records(
                     zotero_uri_web=zotero_uri_web,
                     zotero_uri_select=zotero_uri_select,
                     zotero_file_url=zotero_file_url,
+                    authenticated_zotero_file_url=authenticated_zotero_file_url,
+                    ingest_url=ingest_url,
+                    ingest_url_kind=ingest_url_kind,
                     discovered_at=discovered_at,
                     item_title=item.title,
                     library_id=library_id,
@@ -114,6 +130,11 @@ def log_export_records(
 
     for rec in records:
         ck = rec.citation_key if rec.citation_key is not None else ""
+        ingest_url = (
+            redact_url(rec.ingest_url)
+            if rec.ingest_url_kind == "authenticated_zotero_attachment_url"
+            else rec.ingest_url
+        )
         msg = (
             f"[DISCOVERY URL] item_key={rec.item_key}  "
             f"attachment_key={rec.attachment_key}\n"
@@ -121,7 +142,9 @@ def log_export_records(
             f"                zotero_uri={rec.zotero_uri}\n"
             f"                zotero_uri_web={rec.zotero_uri_web}\n"
             f"                zotero_uri_select={rec.zotero_uri_select}\n"
-            f"                zotero_file_url={rec.zotero_file_url}"
+            f"                zotero_file_url={rec.zotero_file_url}\n"
+            f"                ingest_url_kind={rec.ingest_url_kind}\n"
+            f"                ingest_url={ingest_url}"
         )
         logger.info(msg)
     logger.info(f"Exported {len(records)} attachment URL record(s).")

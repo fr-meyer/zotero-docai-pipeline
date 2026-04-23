@@ -164,12 +164,18 @@ def dry_run_command(
             )
 
     if cfg.export.attachment_urls.enabled:
-        records = build_export_records(items, zotero_client)
+        records = build_export_records(
+            items,
+            zotero_client,
+            include_authenticated_url=cfg.export.attachment_urls.auth_query.enabled,
+        )
         if cfg.export.attachment_urls.auth_query.enabled:
             for rec in records:
-                auth_url = zotero_client.build_authenticated_attachment_url(
-                    rec.attachment_key
-                )
+                auth_url = rec.authenticated_zotero_file_url
+                if auth_url is None:
+                    auth_url = zotero_client.build_authenticated_attachment_url(
+                        rec.attachment_key
+                    )
                 logger.info(
                     "[AUTH QUERY URL] item_key=%s attachment_key=%s url=%s",
                     rec.item_key,

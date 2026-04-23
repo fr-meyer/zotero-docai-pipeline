@@ -60,6 +60,16 @@ Dry-run mode performs the full item-selection logic but **does not write any tag
 
 A summary line is printed at the end showing the total matched items, total PDFs, and total excluded items.
 
+**Export-only dry-run (no OCR key required):** To validate discovery and log attachment URLs without OCR, use:
+
+```bash
+zotero-docai-pipeline processing.dry_run=true export.attachment_urls.enabled=true
+# or equivalently:
+python -m zotero_docai_pipeline processing.dry_run=true export.attachment_urls.enabled=true
+```
+
+This mode does **not** require `PAGEINDEX_API_KEY` or `MISTRAL_API_KEY`. It runs discovery, logs one `[DISCOVERY URL]` record per PDF attachment, and exits — no bytes are downloaded, no notes are written, and no OCR credentials are needed.
+
 ## Installation
 
 ### Install the package
@@ -99,7 +109,7 @@ export ZOTERO_WRITE_KEY="your-write-capable-zotero-api-key"  # required only for
 
 **Zotero split keys:** `ZOTERO_LIBRARY_ID` is your numeric user library ID, visible in your Zotero web library URL (`https://www.zotero.org/users/{id}`). `ZOTERO_READ_KEY` is required for **all** runs (discovery, export, dry-run); use a dedicated read-only API key (least privilege). `ZOTERO_WRITE_KEY` is required only when write-capable features are active: tag adding (`tag_adding.enabled=true`), note creation (`ocr.enabled=true`), and success/error tagging. You may omit `ZOTERO_WRITE_KEY` for read-only or export-only runs. Obtain both keys from [Zotero key settings](https://www.zotero.org/settings/keys). Using a dedicated read-only key for `ZOTERO_READ_KEY` is strongly recommended.
 
-### OCR provider key (at least one required)
+### OCR provider key (required only when OCR is enabled)
 
 ```bash
 export PAGEINDEX_API_KEY="your-pageindex-api-key"  # For PageIndex OCR
@@ -110,6 +120,8 @@ export MISTRAL_API_KEY="your-mistral-api-key"      # For Mistral OCR
 **Provider Setup:**
 - **PageIndex:** Obtain API key from [PageIndex dashboard](https://docs.pageindex.ai). Optional SDK mode: install with `pip install pageindex` and set `use_sdk: true` in `zotero_docai_pipeline/conf/ocr/pageindex.yaml`.
 - **Mistral:** Obtain API key from [Mistral platform](https://docs.mistral.ai).
+
+> **Note:** `PAGEINDEX_API_KEY` and `MISTRAL_API_KEY` are required **only** when `ocr.enabled=true`. The following run modes work **without** any OCR provider key: export-only dry-run (`processing.dry_run=true export.attachment_urls.enabled=true`), tag-adding-only (`tag_adding.enabled=true`), and download-only (`download.enabled=true`).
 
 > **Note:** Missing or invalid environment variables may cause the CLI to error before help text is shown. If you see unexpected errors on startup, verify your environment variables are set correctly.
 
@@ -329,6 +341,8 @@ Common issues and solutions when running the pipeline:
 **API keys**: Ensure the correct environment variable is set (see [Runtime Prerequisites](#runtime-prerequisites)):
 - `PAGEINDEX_API_KEY` for PageIndex OCR
 - `MISTRAL_API_KEY` for Mistral OCR
+
+These keys are only required when `ocr.enabled=true`; non-OCR runs (export-only dry-run, tag-adding, download-only) do not need them.
 
 **Tree extraction**: Requires PageIndex provider (`ocr.provider: pageindex`), valid `PAGEINDEX_API_KEY`, and `tree_structure.enabled: true` (see [Configuration](#configuration)).
 

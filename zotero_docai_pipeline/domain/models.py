@@ -514,7 +514,10 @@ class DiscoveredAttachmentExportRecord:
     """Zotero attachment key."""
 
     filename: str
-    """Attachment filename."""
+    """Attachment filename as renamed by Zotero using the formula ``{{ firstCreator suffix=" - " }}{{ year suffix=" - " }}{{ title truncate="125" }}``. See https://www.zotero.org/support/file_renaming."""
+
+    filename_source: str
+    """Provenance of the filename. Always ``"zotero_attachment"`` for records assembled by this package."""
 
     citation_key: str | None
     """Citation key when available."""

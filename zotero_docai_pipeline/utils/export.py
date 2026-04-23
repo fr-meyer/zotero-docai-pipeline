@@ -16,6 +16,18 @@ from zotero_docai_pipeline.domain.models import (
 
 _logger = logging.getLogger(__name__)
 
+_GENERIC_FILENAMES: frozenset[str] = frozenset({
+    "file",
+    "file.pdf",
+    "document",
+    "document.pdf",
+})
+
+
+def _is_generic_filename(filename: str) -> bool:
+    x = filename.strip().lower()
+    return x in _GENERIC_FILENAMES
+
 
 def build_export_records(
     items: list[DiscoveredItem],
@@ -39,6 +51,29 @@ def build_export_records(
                     f"filename={attachment.filename!r})"
                 )
 
+            filename_raw = attachment.filename
+            if not isinstance(filename_raw, str):
+                raise ValueError(
+                    f"Filename fidelity check failed for item_key={item.key!r} "
+                    f"attachment_key={attachment.key!r}: "
+                    f"filename={filename_raw!r} is not a string (Zotero API may have returned null or a non-text value). "
+                    'Configure the Zotero rename formula {{ firstCreator suffix=" - " }}{{ year suffix=" - " }}{{ title truncate="125" }} to ensure canonical filenames.'
+                )
+            if not filename_raw.strip():
+                raise ValueError(
+                    f"Filename fidelity check failed for item_key={item.key!r} "
+                    f"attachment_key={attachment.key!r}: "
+                    f"filename={filename_raw!r} is empty or whitespace-only. "
+                    'Configure the Zotero rename formula {{ firstCreator suffix=" - " }}{{ year suffix=" - " }}{{ title truncate="125" }} to ensure canonical filenames.'
+                )
+            if _is_generic_filename(filename_raw):
+                raise ValueError(
+                    f"Filename fidelity check failed for item_key={item.key!r} "
+                    f"attachment_key={attachment.key!r}: "
+                    f"filename={filename_raw!r} matches a known generic fallback pattern. "
+                    'Configure the Zotero rename formula {{ firstCreator suffix=" - " }}{{ year suffix=" - " }}{{ title truncate="125" }} to ensure canonical filenames.'
+                )
+
             zotero_uri_web = f"https://www.zotero.org/users/{library_id}/items/{item.key}"
             zotero_uri = zotero_uri_web
             zotero_uri_select = f"zotero://select/library/items/{item.key}"
@@ -50,7 +85,8 @@ def build_export_records(
                 DiscoveredAttachmentExportRecord(
                     item_key=item.key,
                     attachment_key=attachment.key,
-                    filename=attachment.filename,
+                    filename=filename_raw,
+                    filename_source="zotero_attachment",
                     citation_key=item.citation_key,
                     zotero_uri=zotero_uri,
                     zotero_uri_web=zotero_uri_web,

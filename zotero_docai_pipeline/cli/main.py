@@ -216,8 +216,8 @@ def validate_flags(cfg: AppConfig) -> None:
     write_reasons: list[str] = []
     if cfg.ocr.enabled and not cfg.processing.dry_run:
         write_reasons.append("OCR (live run creates Zotero notes)")
-    if cfg.tag_adding.enabled:
-        write_reasons.append("tag_adding.enabled")
+    if cfg.tag_adding.enabled and not cfg.processing.dry_run:
+        write_reasons.append("tag_adding.enabled (live run writes tags to Zotero)")
     if cfg.tagging.apply_on_success.values and not cfg.processing.dry_run:
         write_reasons.append(
             "tagging.apply_on_success is non-empty (live run writes post-processing success tags)"
@@ -492,8 +492,8 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
         if not OmegaConf.is_missing(credentials_cfg, "library_id"):
             raw_library_id = credentials_cfg.library_id
             if (
-                raw_library_id not in (None, "")
-                and raw_library_id != PACKAGED_PLACEHOLDER_LIBRARY_ID
+                raw_library_id != PACKAGED_PLACEHOLDER_LIBRARY_ID
+                and raw_library_id is not None
             ):
                 raise ConfigError(
                     "credentials.library_id must not be set via Hydra override. "
@@ -502,8 +502,8 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
         if not OmegaConf.is_missing(credentials_cfg, "read_key"):
             raw_read_key = credentials_cfg.read_key
             if (
-                raw_read_key not in (None, "")
-                and raw_read_key != PACKAGED_PLACEHOLDER_READ_KEY
+                raw_read_key != PACKAGED_PLACEHOLDER_READ_KEY
+                and raw_read_key is not None
             ):
                 raise ConfigError(
                     "credentials.read_key must not be set via Hydra override. "
@@ -511,7 +511,7 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
                 )
         if not OmegaConf.is_missing(credentials_cfg, "write_key"):
             raw_write_key = credentials_cfg.write_key
-            if raw_write_key not in (None, ""):
+            if raw_write_key is not None:
                 raise ConfigError(
                     "credentials.write_key must not be set via Hydra override. "
                     "Set ZOTERO_WRITE_KEY as an environment variable instead."

@@ -25,6 +25,8 @@ class ConfigError(Exception):
 
 PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER = "__PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER__"
 PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR = "__PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR__"
+PACKAGED_PLACEHOLDER_LIBRARY_ID = "__PACKAGED_PLACEHOLDER_LIBRARY_ID__"
+PACKAGED_PLACEHOLDER_READ_KEY = "__PACKAGED_PLACEHOLDER_READ_KEY__"
 
 _configs_registered = False
 
@@ -170,37 +172,53 @@ def _strip_dedup(values: list[object], field_name: str) -> list[str]:
 
 
 @dataclass
-class ZoteroConfig:
-    """Configuration for Zotero API integration.
+class AuthQueryConfig:
+    """Zotero API credentials and log-redaction for authenticated queries.
 
-    Contains settings for connecting to and interacting with the Zotero API,
-    including library identification, authentication, and error tagging.
+    Library ID and API keys for connection to Zotero are set via environment
+    variables (see :func:`zotero_docai_pipeline.cli.main.build_app_config`).
     """
 
     library_id: str
-    """Zotero library ID. Find this in your Zotero web library URL:
-    https://www.zotero.org/users/{library_id}"""
+    read_key: str
+    write_key: str | None = None
+    redact_logs: bool = True
 
-    api_key: str
-    """Zotero API key. Obtain from https://www.zotero.org/settings/keys"""
+    def __post_init__(self) -> None:
+        if (
+            not self.library_id
+            or not str(self.library_id).strip()
+            or self.library_id == PACKAGED_PLACEHOLDER_LIBRARY_ID
+        ):
+            raise ConfigError(
+                "ZOTERO_LIBRARY_ID must be set to your numeric user library ID "
+                "(not empty, not a packaged placeholder). "
+                "Find it in your Zotero web library URL: "
+                "https://www.zotero.org/users/{id}"
+            )
+        if (
+            not self.read_key
+            or not str(self.read_key).strip()
+            or self.read_key == PACKAGED_PLACEHOLDER_READ_KEY
+        ):
+            raise ConfigError(
+                "ZOTERO_READ_KEY must be set. Obtain a read-only API key from "
+                "https://www.zotero.org/settings/keys"
+            )
+
+
+@dataclass
+class ZoteroConfig:
+    """Zotero integration settings that are not connection credentials.
+
+    Connection and authentication are configured via :class:`AuthQueryConfig`
+    and environment variables. This group holds feature flags such as error
+    tagging after failed processing.
+    """
 
     error_tagging_enabled: bool = True
     """Whether to add error tags to failed items. Makes it easy to identify
     failed items in Zotero."""
-
-    def __post_init__(self) -> None:
-        """Validate that library_id and api_key are not empty."""
-        if not self.library_id or not self.library_id.strip():
-            raise ConfigError(
-                "library_id is required and cannot be empty. "
-                "Find your library ID in your Zotero web library URL: "
-                "https://www.zotero.org/users/{library_id}"
-            )
-        if not self.api_key or not self.api_key.strip():
-            raise ConfigError(
-                "api_key is required and cannot be empty. Obtain your API key from "
-                "https://www.zotero.org/settings/keys"
-            )
 
 
 @dataclass
@@ -535,6 +553,13 @@ class TagAddingConfig:
 
 
 @dataclass
+class AuthQueryHelperConfig:
+    """Feature helper flags for the authenticated URL export / auth query path."""
+
+    enabled: bool = False
+
+
+@dataclass
 class AttachmentUrlExportConfig:
     """Configuration for exporting discovered attachment URLs."""
 
@@ -552,6 +577,8 @@ class AttachmentUrlExportConfig:
 
     format: str = "json"
     """Export format identifier."""
+
+    auth_query: AuthQueryHelperConfig = field(default_factory=AuthQueryHelperConfig)
 
     def __post_init__(self) -> None:
         """Validate attachment URL export configuration."""
@@ -743,7 +770,7 @@ class AppConfig:
     """
 
     zotero: ZoteroConfig
-    """Zotero API configuration."""
+    """Zotero feature flags (e.g. error tagging), not connection credentials."""
 
     ocr: OCRProviderConfig
     """OCR provider configuration (Mistral, PageIndex, etc.)."""
@@ -753,6 +780,9 @@ class AppConfig:
 
     storage: StorageConfig
     """Storage options configuration."""
+
+    credentials: AuthQueryConfig
+    """Zotero connection credentials and log-redaction (from environment)."""
 
     tree_structure: TreeStructureConfig = field(default_factory=TreeStructureConfig)
     """Tree structure extraction and processing configuration."""
@@ -785,6 +815,7 @@ def register_configs() -> None:
     # Register config groups with names distinct from YAML files to avoid
     # deprecated automatic schema matching. Each YAML file explicitly extends
     # its schema via its defaults list.
+    cs.store(group="credentials", name="default", node=AuthQueryConfig)
     cs.store(group="zotero", name="base_default", node=ZoteroConfig)
 
     # Register OCR provider configs

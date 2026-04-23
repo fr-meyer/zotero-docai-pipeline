@@ -98,6 +98,7 @@ from zotero_docai_pipeline.utils.export import (
     write_manifest,
 )
 from zotero_docai_pipeline.utils.progress import ProgressBar
+from zotero_docai_pipeline.utils.redaction import redact_url
 from zotero_docai_pipeline.utils.retry import retry_with_backoff
 
 
@@ -1828,6 +1829,17 @@ class Pipeline:
 
         if self.export_config.attachment_urls.enabled:
             records = build_export_records(items, self.zotero_client)
+            if self.export_config.attachment_urls.auth_query.enabled:
+                for rec in records:
+                    auth_url = self.zotero_client.build_authenticated_attachment_url(
+                        rec.attachment_key
+                    )
+                    self.logger.info(
+                        "[AUTH QUERY URL] item_key=%s attachment_key=%s url=%s",
+                        rec.item_key,
+                        rec.attachment_key,
+                        redact_url(auth_url),
+                    )
             if self.export_config.attachment_urls.log:
                 log_export_records(records, self.logger)
             if self.export_config.attachment_urls.write_manifest:

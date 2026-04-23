@@ -9,12 +9,10 @@ defaults:
   - tag_adding: default
   - tagging: default
   - export: default
+  - credentials: default
   - _self_
 
 # Hydra runtime configuration
 hydra:
   job:
     chdir: false
-
-zotero:
-  library_id: "${oc.env:ZOTERO_LIBRARY_ID}"

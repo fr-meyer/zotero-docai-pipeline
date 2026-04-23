@@ -19,7 +19,7 @@ import sys
 from collections.abc import Mapping
 
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from zotero_docai_pipeline.cli.commands import dry_run_command, process_command
 from zotero_docai_pipeline.clients.exceptions import (
@@ -34,11 +34,15 @@ from zotero_docai_pipeline.clients.zotero_client import ZoteroClient
 from zotero_docai_pipeline.domain.config import (
     AppConfig,
     AttachmentUrlExportConfig,
+    AuthQueryConfig,
+    AuthQueryHelperConfig,
     ConfigError,
     DownloadConfig,
     ExportConfig,
     MistralOCRConfig,
     PACKAGED_PLACEHOLDER_DOWNLOAD_FOLDER,
+    PACKAGED_PLACEHOLDER_LIBRARY_ID,
+    PACKAGED_PLACEHOLDER_READ_KEY,
     PACKAGED_PLACEHOLDER_STORAGE_BASE_DIR,
     PageIndexOCRConfig,
     ProcessingConfig,
@@ -55,6 +59,7 @@ from zotero_docai_pipeline.domain.config import (
 )
 from zotero_docai_pipeline.domain.tree_processor import TreeStructureProcessor
 from zotero_docai_pipeline.utils.logging import setup_logging
+from zotero_docai_pipeline.utils.redaction import redact_message
 
 # ---------------------------------------------------------------------------
 # Populate Hydra's ConfigStore before the @hydra.main decorator is evaluated.
@@ -85,7 +90,7 @@ def initialize_clients(
         OCR is disabled.
     """
     logger.info("Initializing Zotero client...")
-    zotero_client = ZoteroClient(cfg.zotero)
+    zotero_client = ZoteroClient(cfg.credentials)
     logger.info("Zotero client initialized successfully")
 
     if not cfg.ocr.enabled:
@@ -196,6 +201,48 @@ def validate_flags(cfg: AppConfig) -> None:
                 "Invalid configuration: at least one operation must be enabled. "
                 "Set download.enabled=true, ocr.enabled=true, or tag_adding.enabled=true."
             )
+
+    read_key = cfg.credentials.read_key
+    if (
+        not read_key
+        or not str(read_key).strip()
+        or read_key == PACKAGED_PLACEHOLDER_READ_KEY
+    ):
+        raise ConfigError(
+            "ZOTERO_READ_KEY must be set. Obtain a read-only API key from "
+            "https://www.zotero.org/settings/keys"
+        )
+
+    write_reasons: list[str] = []
+    if cfg.ocr.enabled and not cfg.processing.dry_run:
+        write_reasons.append("OCR (live run creates Zotero notes)")
+    if cfg.tag_adding.enabled and not cfg.processing.dry_run:
+        write_reasons.append("tag_adding.enabled (live run writes tags to Zotero)")
+    if cfg.tagging.apply_on_success.values and not cfg.processing.dry_run:
+        write_reasons.append(
+            "tagging.apply_on_success is non-empty (live run writes post-processing success tags)"
+        )
+    if (
+        cfg.tagging.apply_on_error.values
+        and cfg.zotero.error_tagging_enabled
+        and not cfg.processing.dry_run
+    ):
+        write_reasons.append(
+            "tagging.apply_on_error is non-empty and zotero.error_tagging_enabled (live run writes post-processing error tags)"
+        )
+    if write_reasons:
+        wk = cfg.credentials.write_key
+        if wk is None or (isinstance(wk, str) and not wk.strip()):
+            details = ", ".join(write_reasons)
+            raise ConfigError(
+                f"ZOTERO_WRITE_KEY is required when these write features are active: {details}. "
+                "Set a write-capable API key in the environment."
+            )
+
+    if not cfg.credentials.redact_logs and cfg.export.attachment_urls.auth_query.enabled:
+        raise ConfigError(
+            "credentials.redact_logs must be true when export.attachment_urls.auth_query.enabled=true"
+        )
 
     logger.debug("Flag configuration validated successfully")
 
@@ -427,14 +474,69 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
         include_abstract=cfg.tagging.include_abstract,
     )
 
-    attachment_urls_export = AttachmentUrlExportConfig(**cfg.export.attachment_urls)
+    att_urls = OmegaConf.to_container(
+        cfg.export.attachment_urls, resolve=True
+    )
+    if not isinstance(att_urls, dict):
+        raise ConfigError("export.attachment_urls must resolve to a mapping")
+    auth_query_raw = att_urls.pop("auth_query", {})
+    if not isinstance(auth_query_raw, dict):
+        raise ConfigError("export.attachment_urls.auth_query must be a mapping")
+    attachment_urls_export = AttachmentUrlExportConfig(
+        **att_urls, auth_query=AuthQueryHelperConfig(**auth_query_raw)
+    )
     export_config = ExportConfig(attachment_urls=attachment_urls_export)
+
+    if not OmegaConf.is_missing(cfg, "credentials"):
+        credentials_cfg = cfg.credentials
+        if not OmegaConf.is_missing(credentials_cfg, "library_id"):
+            raw_library_id = credentials_cfg.library_id
+            if (
+                raw_library_id != PACKAGED_PLACEHOLDER_LIBRARY_ID
+                and raw_library_id is not None
+            ):
+                raise ConfigError(
+                    "credentials.library_id must not be set via Hydra override. "
+                    "Set ZOTERO_LIBRARY_ID as an environment variable instead."
+                )
+        if not OmegaConf.is_missing(credentials_cfg, "read_key"):
+            raw_read_key = credentials_cfg.read_key
+            if (
+                raw_read_key != PACKAGED_PLACEHOLDER_READ_KEY
+                and raw_read_key is not None
+            ):
+                raise ConfigError(
+                    "credentials.read_key must not be set via Hydra override. "
+                    "Set ZOTERO_READ_KEY as an environment variable instead."
+                )
+        if not OmegaConf.is_missing(credentials_cfg, "write_key"):
+            raw_write_key = credentials_cfg.write_key
+            if raw_write_key is not None:
+                raise ConfigError(
+                    "credentials.write_key must not be set via Hydra override. "
+                    "Set ZOTERO_WRITE_KEY as an environment variable instead."
+                )
+
+    library_id = os.getenv("ZOTERO_LIBRARY_ID") or PACKAGED_PLACEHOLDER_LIBRARY_ID
+    read_key_env = os.getenv("ZOTERO_READ_KEY") or PACKAGED_PLACEHOLDER_READ_KEY
+    write_key_env = os.getenv("ZOTERO_WRITE_KEY")
+    if OmegaConf.is_missing(cfg, "credentials"):
+        redact_logs = True
+    else:
+        redact_logs = bool(cfg.credentials.redact_logs)
+    auth_query_config = AuthQueryConfig(
+        library_id=library_id,
+        read_key=read_key_env,
+        write_key=write_key_env,
+        redact_logs=redact_logs,
+    )
 
     return AppConfig(
         zotero=ZoteroConfig(**cfg.zotero),
         ocr=ocr_config,
         processing=ProcessingConfig(**cfg.processing),
         storage=StorageConfig(**cfg.storage),
+        credentials=auth_query_config,
         tree_structure=tree_structure_config,
         download=DownloadConfig(retry=retry_config, **download_kw),
         tag_adding=tag_adding_config,
@@ -459,9 +561,14 @@ Entry points:
 
 Required environment variables:
   ZOTERO_LIBRARY_ID   Your Zotero user-library numeric ID
-  ZOTERO_API_KEY      Zotero API key (https://www.zotero.org/settings/keys)
+  ZOTERO_READ_KEY     Zotero read-only API key — required for all runs
+                      (https://www.zotero.org/settings/keys)
+  ZOTERO_WRITE_KEY    Zotero write-capable API key — required only when write
+                      features are enabled (OCR note creation, tag_adding,
+                      post-processing tag writes)
   OCR provider key    MISTRAL_API_KEY or PAGEINDEX_API_KEY — required only when
-                      OCR is enabled (not needed for download-only or tag-only runs)
+                      OCR is enabled (not needed for download-only, tag-only, or
+                      export-only dry-run)
 
 Key override examples:
   ocr.enabled=true
@@ -496,7 +603,7 @@ def main(cfg: DictConfig) -> None:
         the intended code (0 for success; 1 or 2 from commands; 3 for
         configuration or fatal errors).
     """
-    logger = setup_logging()
+    logger = logging.getLogger(__name__)
 
     exit_code = 3
     try:
@@ -546,10 +653,14 @@ def main(cfg: DictConfig) -> None:
             # Validate flag compatibility (dry_run vs download, etc.)
             validate_flags(app_cfg)
 
+            logger = setup_logging(
+                redact_logs=app_cfg.credentials.redact_logs
+            )
+
             # Route to appropriate command
             if app_cfg.processing.dry_run:
                 logger.info("Initializing Zotero client...")
-                zotero_client = ZoteroClient(app_cfg.zotero)
+                zotero_client = ZoteroClient(app_cfg.credentials)
                 logger.info("Zotero client initialized successfully")
                 exit_code = dry_run_command(app_cfg, logger, zotero_client)
             else:
@@ -580,13 +691,13 @@ def main(cfg: DictConfig) -> None:
                 )
 
     except ConfigError as e:
-        logger.error(f"Configuration error: {e}")
+        logger.error(f"Configuration error: {redact_message(str(e))}")
         exit_code = 3
     except (ZoteroClientError, OCRClientError) as e:
-        logger.error(f"Fatal error: {e}", exc_info=True)
+        logger.error(f"Fatal error: {redact_message(str(e))}", exc_info=True)
         exit_code = 3
     except Exception as e:
-        logger.error(f"Fatal error: {e}", exc_info=True)
+        logger.error(f"Fatal error: {redact_message(str(e))}", exc_info=True)
         exit_code = 3
 
     sys.exit(exit_code)

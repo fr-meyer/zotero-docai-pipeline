@@ -22,6 +22,7 @@ from zotero_docai_pipeline.utils.export import (
     log_export_records,
     write_manifest,
 )
+from zotero_docai_pipeline.utils.redaction import redact_url
 from zotero_docai_pipeline.utils.logging import (
     _format_with_emoji,
     _supports_unicode,
@@ -164,6 +165,17 @@ def dry_run_command(
 
     if cfg.export.attachment_urls.enabled:
         records = build_export_records(items, zotero_client)
+        if cfg.export.attachment_urls.auth_query.enabled:
+            for rec in records:
+                auth_url = zotero_client.build_authenticated_attachment_url(
+                    rec.attachment_key
+                )
+                logger.info(
+                    "[AUTH QUERY URL] item_key=%s attachment_key=%s url=%s",
+                    rec.item_key,
+                    rec.attachment_key,
+                    redact_url(auth_url),
+                )
         if cfg.export.attachment_urls.log:
             log_export_records(records, logger)
         if cfg.export.attachment_urls.write_manifest:

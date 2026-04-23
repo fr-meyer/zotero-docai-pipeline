@@ -92,9 +92,12 @@ The following environment variables must be set **before running** the pipeline.
 ### Zotero credentials (required)
 
 ```bash
-export ZOTERO_LIBRARY_ID="your-library-id"
-export ZOTERO_API_KEY="your-zotero-api-key"
+export ZOTERO_LIBRARY_ID="your-numeric-library-id"
+export ZOTERO_READ_KEY="your-read-only-zotero-api-key"   # required for all runs
+export ZOTERO_WRITE_KEY="your-write-capable-zotero-api-key"  # required only for write-capable runs
 ```
+
+**Zotero split keys:** `ZOTERO_LIBRARY_ID` is your numeric user library ID, visible in your Zotero web library URL (`https://www.zotero.org/users/{id}`). `ZOTERO_READ_KEY` is required for **all** runs (discovery, export, dry-run); use a dedicated read-only API key (least privilege). `ZOTERO_WRITE_KEY` is required only when write-capable features are active: tag adding (`tag_adding.enabled=true`), note creation (`ocr.enabled=true`), and success/error tagging. You may omit `ZOTERO_WRITE_KEY` for read-only or export-only runs. Obtain both keys from [Zotero key settings](https://www.zotero.org/settings/keys). Using a dedicated read-only key for `ZOTERO_READ_KEY` is strongly recommended.
 
 ### OCR provider key (at least one required)
 
@@ -334,8 +337,8 @@ Common issues and solutions when running the pipeline:
 Verify:
 - Items are tagged with the configured include tag(s) (see `tagging.selection.include.values`, default: `docai`)
 - Items are not already tagged with the configured exclude tag(s) (see `tagging.selection.exclude.values`, default: `docai-processed`)
-- `zotero.library_id` is correctly configured
-- Zotero API key has access to the specified library
+- `ZOTERO_LIBRARY_ID` env var is set to your correct numeric library ID
+- `ZOTERO_READ_KEY` has read access to the specified library
 
 ### Note Size Exceeded
 

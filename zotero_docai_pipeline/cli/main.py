@@ -602,7 +602,7 @@ def main(cfg: DictConfig) -> None:
         the intended code (0 for success; 1 or 2 from commands; 3 for
         configuration or fatal errors).
     """
-    logger = setup_logging()
+    logger = logging.getLogger(__name__)
 
     exit_code = 3
     try:
@@ -651,6 +651,10 @@ def main(cfg: DictConfig) -> None:
 
             # Validate flag compatibility (dry_run vs download, etc.)
             validate_flags(app_cfg)
+
+            logger = setup_logging(
+                redact_logs=app_cfg.credentials.redact_logs
+            )
 
             # Route to appropriate command
             if app_cfg.processing.dry_run:

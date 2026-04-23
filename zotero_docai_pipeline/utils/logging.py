@@ -137,12 +137,17 @@ def _ensure_redaction_on_handlers() -> None:
             handler.formatter = _RedactingDelegateFormatter(handler.formatter)
 
 
-def setup_logging() -> logging.Logger:
+def setup_logging(*, redact_logs: bool = True) -> logging.Logger:
     """Initialize logging configuration for the pipeline.
 
     Returns the configured logger instance. Hydra automatically configures
     logging when @hydra.main() decorator is used, so this function primarily
     returns the logger instance for use throughout the pipeline.
+
+    Args:
+        redact_logs: When True (default), attach the redaction filter and
+            delegate formatter to all effective log handlers. When False, skip
+            that step so log output is not run through the redaction pipeline.
 
     Returns:
         Configured logger instance ready for use
@@ -158,7 +163,8 @@ def setup_logging() -> logging.Logger:
     # only the root logger) so records from module loggers are sanitized; a
     # redacting formatter ensures tracebacks and formatted exception text are
     # redacted. Repeated calls are idempotent.
-    _ensure_redaction_on_handlers()
+    if redact_logs:
+        _ensure_redaction_on_handlers()
 
     return logger
 

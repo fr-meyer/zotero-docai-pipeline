@@ -16,6 +16,7 @@ from zotero_docai_pipeline.domain.models import (
     ProcessingResult,
     TagAddingResult,
 )
+from zotero_docai_pipeline.utils.redaction import redact_message
 
 
 def _supports_unicode() -> bool:
@@ -58,6 +59,84 @@ def _format_with_emoji(message: str, emoji: str, fallback: str) -> str:
         return f"{fallback} {message}"
 
 
+class _RedactionFilter(logging.Filter):
+    """Applies :func:`redact_message` to log record messages before format/emit.
+
+    Exception/traceback text is handled by :class:`_RedactingDelegateFormatter`
+    on handlers, because ``exc_text`` is usually produced in ``Formatter.format``.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+        try:
+            record.msg = redact_message(record.getMessage())
+            record.args = ()
+            if record.exc_text:
+                record.exc_text = redact_message(record.exc_text)
+        except Exception:
+            pass
+        return True
+
+
+# Single shared filter instance so repeated setup can detect duplicate adds per handler.
+_REDACTION_FILTER: _RedactionFilter = _RedactionFilter()
+
+
+class _RedactingDelegateFormatter(logging.Formatter):
+    """Wraps a handler's formatter and redacts the full output, including tracebacks.
+
+    The wrapped formatter's :meth:`~logging.Formatter.format` output may include
+    exception text; :func:`redact_message` is applied to the entire string.
+    """
+
+    def __init__(self, inner: logging.Formatter | None) -> None:
+        super().__init__()
+        self._inner = inner
+
+    def format(self, record: logging.LogRecord) -> str:
+        if self._inner is not None:
+            return redact_message(self._inner.format(record))
+        return redact_message(logging.Formatter().format(record))
+
+    def usesTime(self) -> bool:  # noqa: N802
+        if self._inner is not None and hasattr(self._inner, "usesTime"):
+            return self._inner.usesTime()
+        return super().usesTime()
+
+
+def _iter_effective_handlers() -> list[logging.Handler]:
+    """Return distinct handlers: root and any other loggers' handlers (e.g. no-propagate)."""
+    root = logging.getLogger()
+    seen: set[int] = set()
+    out: list[logging.Handler] = []
+
+    def add(h: logging.Handler) -> None:
+        hid = id(h)
+        if hid not in seen:
+            seen.add(hid)
+            out.append(h)
+
+    for h in root.handlers:
+        add(h)
+    for name in list(logging.Logger.manager.loggerDict):
+        if not name:
+            continue
+        lg = logging.getLogger(name)
+        if isinstance(lg, logging.PlaceHolder):
+            continue
+        for h in lg.handlers:
+            add(h)
+    return out
+
+
+def _ensure_redaction_on_handlers() -> None:
+    """Attach redaction filter and redacting formatter to each effective handler once."""
+    for handler in _iter_effective_handlers():
+        if not any(f is _REDACTION_FILTER for f in handler.filters):
+            handler.addFilter(_REDACTION_FILTER)
+        if not isinstance(handler.formatter, _RedactingDelegateFormatter):
+            handler.formatter = _RedactingDelegateFormatter(handler.formatter)
+
+
 def setup_logging() -> logging.Logger:
     """Initialize logging configuration for the pipeline.
 
@@ -75,8 +154,11 @@ def setup_logging() -> logging.Logger:
     logger = logging.getLogger(__name__)
 
     # Hydra automatically configures logging, so we primarily work with
-    # the existing logger configuration. We can add custom formatters if needed.
-    # For now, return the logger as-is since Hydra handles the setup.
+    # the existing logger configuration. Redaction is applied on handlers (not
+    # only the root logger) so records from module loggers are sanitized; a
+    # redacting formatter ensures tracebacks and formatted exception text are
+    # redacted. Repeated calls are idempotent.
+    _ensure_redaction_on_handlers()
 
     return logger
 

@@ -8,3 +8,5 @@ attachment_urls:
   write_manifest: false
   manifest_path: null
   format: json
+  auth_query:
+    enabled: false

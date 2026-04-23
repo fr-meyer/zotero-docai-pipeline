@@ -59,6 +59,7 @@ from zotero_docai_pipeline.domain.config import (
 )
 from zotero_docai_pipeline.domain.tree_processor import TreeStructureProcessor
 from zotero_docai_pipeline.utils.logging import setup_logging
+from zotero_docai_pipeline.utils.redaction import redact_message
 
 # ---------------------------------------------------------------------------
 # Populate Hydra's ConfigStore before the @hydra.main decorator is evaluated.
@@ -652,13 +653,13 @@ def main(cfg: DictConfig) -> None:
                 )
 
     except ConfigError as e:
-        logger.error(f"Configuration error: {e}")
+        logger.error(f"Configuration error: {redact_message(str(e))}")
         exit_code = 3
     except (ZoteroClientError, OCRClientError) as e:
-        logger.error(f"Fatal error: {e}", exc_info=True)
+        logger.error(f"Fatal error: {redact_message(str(e))}", exc_info=True)
         exit_code = 3
     except Exception as e:
-        logger.error(f"Fatal error: {e}", exc_info=True)
+        logger.error(f"Fatal error: {redact_message(str(e))}", exc_info=True)
         exit_code = 3
 
     sys.exit(exit_code)

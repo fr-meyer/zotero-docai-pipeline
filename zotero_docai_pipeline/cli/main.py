@@ -567,7 +567,8 @@ Required environment variables:
                       features are enabled (OCR note creation, tag_adding,
                       post-processing tag writes)
   OCR provider key    MISTRAL_API_KEY or PAGEINDEX_API_KEY — required only when
-                      OCR is enabled (not needed for download-only or tag-only runs)
+                      OCR is enabled (not needed for download-only, tag-only, or
+                      export-only dry-run)
 
 Key override examples:
   ocr.enabled=true

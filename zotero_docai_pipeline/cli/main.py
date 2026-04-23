@@ -19,7 +19,7 @@ import sys
 from collections.abc import Mapping
 
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from zotero_docai_pipeline.cli.commands import dry_run_command, process_command
 from zotero_docai_pipeline.clients.exceptions import (
@@ -470,27 +470,31 @@ def build_app_config(cfg: DictConfig) -> AppConfig:
         include_abstract=cfg.tagging.include_abstract,
     )
 
-    auth_query_helper = AuthQueryHelperConfig(
-        **cfg.export.attachment_urls.auth_query
+    att_urls = OmegaConf.to_container(
+        cfg.export.attachment_urls, resolve=True
     )
-    attachment_url_kw = {
-        k: v
-        for k, v in cfg.export.attachment_urls.items()
-        if k != "auth_query"
-    }
+    if not isinstance(att_urls, dict):
+        raise ConfigError("export.attachment_urls must resolve to a mapping")
+    auth_query_raw = att_urls.pop("auth_query", {})
+    if not isinstance(auth_query_raw, dict):
+        raise ConfigError("export.attachment_urls.auth_query must be a mapping")
     attachment_urls_export = AttachmentUrlExportConfig(
-        **attachment_url_kw, auth_query=auth_query_helper
+        **att_urls, auth_query=AuthQueryHelperConfig(**auth_query_raw)
     )
     export_config = ExportConfig(attachment_urls=attachment_urls_export)
 
     library_id = os.getenv("ZOTERO_LIBRARY_ID") or PACKAGED_PLACEHOLDER_LIBRARY_ID
     read_key_env = os.getenv("ZOTERO_READ_KEY") or PACKAGED_PLACEHOLDER_READ_KEY
     write_key_env = os.getenv("ZOTERO_WRITE_KEY")
+    if OmegaConf.is_missing(cfg, "credentials"):
+        redact_logs = True
+    else:
+        redact_logs = bool(cfg.credentials.redact_logs)
     auth_query_config = AuthQueryConfig(
         library_id=library_id,
         read_key=read_key_env,
         write_key=write_key_env,
-        redact_logs=cfg.credentials.redact_logs,
+        redact_logs=redact_logs,
     )
 
     return AppConfig(

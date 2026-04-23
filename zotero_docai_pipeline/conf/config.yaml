@@ -15,6 +15,3 @@ defaults:
 hydra:
   job:
     chdir: false
-
-zotero:
-  library_id: "${oc.env:ZOTERO_LIBRARY_ID}"
